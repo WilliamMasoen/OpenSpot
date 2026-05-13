@@ -28,6 +28,12 @@ export const listingService = {
   delete: (id: string) =>
     apiClient.delete<void>(`/api/listings/${id}`),
 
+  toggleFavorite: (id: string) =>
+    apiClient.post<{ isFavorited: boolean }>(`/api/listings/${id}/favorite`),
+
+  getFavorites: () =>
+    apiClient.get<Listing[]>('/api/listings/favorites'),
+
   search: (params: { q?: string; lat?: number; lng?: number; radius?: number }) => {
     const qs = new URLSearchParams();
     if (params.q) qs.set('q', params.q);

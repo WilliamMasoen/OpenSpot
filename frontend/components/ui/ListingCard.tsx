@@ -1,4 +1,5 @@
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Listing } from '@/types/listing';
 import { theme } from '@/constants/theme';
 
@@ -6,6 +7,8 @@ interface ListingCardProps {
   listing: Listing;
   onPress?: () => void;
   variant?: 'full' | 'tile';
+  isFavorited?: boolean;
+  onFavoritePress?: () => void;
 }
 
 function formatDate(dateStr: string): string {
@@ -24,19 +27,32 @@ function AvailableBadge({ isAvailable }: { isAvailable: boolean }) {
   );
 }
 
-export function ListingCard({ listing, onPress, variant = 'full' }: ListingCardProps) {
+export function ListingCard({
+  listing, onPress, variant = 'full', isFavorited, onFavoritePress,
+}: ListingCardProps) {
   const hasImage = listing.imageUrls?.length > 0;
 
   if (variant === 'tile') {
     return (
       <TouchableOpacity style={styles.tile} onPress={onPress} activeOpacity={0.75}>
-        {hasImage ? (
-          <Image source={{ uri: listing.imageUrls[0] }} style={styles.tileImage} resizeMode="cover" />
-        ) : (
-          <View style={styles.tileImagePlaceholder}>
-            <Text style={styles.tileImagePlaceholderText}>🅿️</Text>
-          </View>
-        )}
+        <View style={styles.tileImageContainer}>
+          {hasImage ? (
+            <Image source={{ uri: listing.imageUrls[0] }} style={styles.tileImage} resizeMode="cover" />
+          ) : (
+            <View style={styles.tileImagePlaceholder}>
+              <Text style={styles.tileImagePlaceholderText}>🅿️</Text>
+            </View>
+          )}
+          {onFavoritePress !== undefined && (
+            <TouchableOpacity style={styles.heartButton} onPress={onFavoritePress} hitSlop={8}>
+              <Ionicons
+                name={isFavorited ? 'heart' : 'heart-outline'}
+                size={16}
+                color={isFavorited ? '#EF4444' : '#fff'}
+              />
+            </TouchableOpacity>
+          )}
+        </View>
         <View style={styles.tileBody}>
           <Text style={styles.tileTitle} numberOfLines={1}>{listing.title}</Text>
           <Text style={styles.tileAddress} numberOfLines={1}>{listing.address}</Text>
@@ -138,6 +154,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...theme.shadow.card,
   },
+  tileImageContainer: {
+    position: 'relative',
+  },
   tileImage: {
     width: '100%',
     height: 110,
@@ -151,6 +170,17 @@ const styles = StyleSheet.create({
   },
   tileImagePlaceholderText: {
     fontSize: 32,
+  },
+  heartButton: {
+    position: 'absolute',
+    top: 7,
+    right: 7,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tileBody: {
     padding: theme.spacing.sm,

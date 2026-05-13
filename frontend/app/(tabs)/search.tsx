@@ -9,6 +9,7 @@ import { router } from 'expo-router';
 import * as Location from 'expo-location';
 import { ListingCard } from '@/components/ui/ListingCard';
 import { useSearch } from '@/hooks/useSearch';
+import { useFavoritesMap } from '@/hooks/useListings';
 import { theme } from '@/constants/theme';
 import { Listing } from '@/types/listing';
 
@@ -20,6 +21,7 @@ export default function SearchScreen() {
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
   const inputRef = useRef<TextInput>(null);
   const { results, loading, error, hasSearched, search, clear } = useSearch();
+  const { getFavorited, toggle } = useFavoritesMap(results);
 
   const requestLocation = async (): Promise<{ lat: number; lng: number } | null> => {
     const { status } = await Location.requestForegroundPermissionsAsync();
@@ -136,6 +138,8 @@ export default function SearchScreen() {
               <ListingCard
                 listing={item}
                 variant="tile"
+                isFavorited={getFavorited(item.id)}
+                onFavoritePress={() => toggle(item.id)}
                 onPress={() => router.push(`/listing/${item.id}`)}
               />
             )}

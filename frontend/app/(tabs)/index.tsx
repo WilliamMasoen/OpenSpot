@@ -3,7 +3,7 @@ import { View, Text, FlatList, StyleSheet, ActivityIndicator, RefreshControl } f
 import { router, useFocusEffect } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { ListingCard } from '@/components/ui/ListingCard';
-import { useListings } from '@/hooks/useListings';
+import { useListings, useFavoritesMap } from '@/hooks/useListings';
 import { theme } from '@/constants/theme';
 import { Listing } from '@/types/listing';
 import { consumeListingsStale } from '@/utils/refreshFlags';
@@ -30,6 +30,7 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
 
 export default function HomeScreen() {
   const { listings, loading, error, refetch } = useListings();
+  const { getFavorited, toggle } = useFavoritesMap(listings);
 
   useFocusEffect(useCallback(() => { if (consumeListingsStale()) refetch(); }, [refetch]));
 
@@ -62,6 +63,8 @@ export default function HomeScreen() {
           <ListingCard
             listing={item}
             variant="tile"
+            isFavorited={getFavorited(item.id)}
+            onFavoritePress={() => toggle(item.id)}
             onPress={() => router.push(`/listing/${item.id}`)}
           />
         )}

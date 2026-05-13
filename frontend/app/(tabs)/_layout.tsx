@@ -85,8 +85,9 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => <TabIcon name="person" focused={focused} />,
         }}
       />
-      {/* Hidden from tab bar — accessible as a route from Profile */}
+      {/* Hidden from tab bar — accessible as routes from Profile */}
       <Tabs.Screen name="my-listings" options={{ href: null }} />
+      <Tabs.Screen name="favorites" options={{ href: null }} />
     </Tabs>
   );
 }

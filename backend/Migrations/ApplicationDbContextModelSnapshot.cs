@@ -227,6 +227,24 @@ namespace backend.Migrations
                     b.ToTable("ListingImages");
                 });
 
+            modelBuilder.Entity("OpenSpot.Listings.Models.UserFavorite", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ListingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId", "ListingId");
+
+                    b.HasIndex("ListingId");
+
+                    b.ToTable("UserFavorites");
+                });
+
             modelBuilder.Entity("OpenSpot.RefreshTokens.RefreshToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -400,6 +418,25 @@ namespace backend.Migrations
                         .IsRequired();
 
                     b.Navigation("Listing");
+                });
+
+            modelBuilder.Entity("OpenSpot.Listings.Models.UserFavorite", b =>
+                {
+                    b.HasOne("OpenSpot.Listings.Models.Listing", "Listing")
+                        .WithMany()
+                        .HasForeignKey("ListingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("OpenSpot.Users.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Listing");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("OpenSpot.RefreshTokens.RefreshToken", b =>

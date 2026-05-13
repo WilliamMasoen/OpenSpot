@@ -5,10 +5,12 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { listingService } from '@/services/listingService';
 import { useAuthStore } from '@/store/authStore';
 import { Listing } from '@/types/listing';
 import { theme } from '@/constants/theme';
+import { markListingsStale } from '@/utils/refreshFlags';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -32,6 +34,7 @@ export default function ListingDetailScreen() {
   const [listing, setListing] = useState<Listing | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [favoriteLoading, setFavoriteLoading] = useState(false);
   const user = useAuthStore((s) => s.user);
 
   useEffect(() => {
@@ -69,6 +72,22 @@ export default function ListingDetailScreen() {
 
   const isOwner = user?.userId === listing.ownerId;
 
+  const handleFavoritePress = async () => {
+    if (favoriteLoading) return;
+    setFavoriteLoading(true);
+    const prev = listing.isFavorited;
+    setListing((l) => l ? { ...l, isFavorited: !l.isFavorited } : l); // optimistic
+    try {
+      const result = await listingService.toggleFavorite(listing.id);
+      setListing((l) => l ? { ...l, isFavorited: result.isFavorited } : l);
+      markListingsStale();
+    } catch {
+      setListing((l) => l ? { ...l, isFavorited: prev } : l);
+    } finally {
+      setFavoriteLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -99,10 +118,26 @@ export default function ListingDetailScreen() {
           {/* Header */}
           <View style={styles.titleRow}>
             <Text style={styles.title}>{listing.title}</Text>
-            <View style={[styles.badge, !listing.isAvailable && styles.badgeTaken]}>
-              <Text style={[styles.badgeText, !listing.isAvailable && styles.badgeTextTaken]}>
-                {listing.isAvailable ? 'Available' : 'Taken'}
-              </Text>
+            <View style={styles.titleActions}>
+              <View style={[styles.badge, !listing.isAvailable && styles.badgeTaken]}>
+                <Text style={[styles.badgeText, !listing.isAvailable && styles.badgeTextTaken]}>
+                  {listing.isAvailable ? 'Available' : 'Taken'}
+                </Text>
+              </View>
+              {!isOwner && (
+                <TouchableOpacity
+                  style={styles.heartBtn}
+                  onPress={handleFavoritePress}
+                  disabled={favoriteLoading}
+                  hitSlop={8}
+                >
+                  <Ionicons
+                    name={listing.isFavorited ? 'heart' : 'heart-outline'}
+                    size={24}
+                    color={listing.isFavorited ? '#EF4444' : theme.colors.textMuted}
+                  />
+                </TouchableOpacity>
+              )}
             </View>
           </View>
 
@@ -214,6 +249,15 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: theme.spacing.sm,
+  },
+  titleActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    marginTop: 4,
+  },
+  heartBtn: {
+    padding: 2,
   },
   title: {
     ...theme.typography.heading,

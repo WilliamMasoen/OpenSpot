@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { listingService } from '@/services/listingService';
 import { Listing, CreateListingRequest } from '@/types/listing';
 
@@ -93,4 +93,64 @@ export function useCreateListing() {
   };
 
   return { createListing, loading, error, clearError: () => setError(null) };
+}
+
+// Manages optimistic favorite state for a list of listings.
+export function useFavoritesMap(listings: Listing[]) {
+  const [pending, setPending] = useState<Record<string, boolean>>({});
+  const pendingRef = useRef(pending);
+  pendingRef.current = pending;
+
+  const getFavorited = useCallback((id: string): boolean => {
+    if (id in pendingRef.current) return pendingRef.current[id];
+    return listings.find((l) => l.id === id)?.isFavorited ?? false;
+  }, [listings]);
+
+  const toggle = useCallback(async (id: string) => {
+    const current = id in pendingRef.current
+      ? pendingRef.current[id]
+      : (listings.find((l) => l.id === id)?.isFavorited ?? false);
+    const next = !current;
+    setPending((prev) => ({ ...prev, [id]: next }));
+    try {
+      const result = await listingService.toggleFavorite(id);
+      setPending((prev) => ({ ...prev, [id]: result.isFavorited }));
+    } catch {
+      setPending((prev) => ({ ...prev, [id]: current }));
+    }
+  }, [listings]);
+
+  return { getFavorited, toggle };
+}
+
+export function useMyFavorites() {
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchFavorites = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await listingService.getFavorites();
+      setListings(data);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load favorites.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchFavorites(); }, [fetchFavorites]);
+
+  const removeFavorite = useCallback(async (id: string) => {
+    setListings((prev) => prev.filter((l) => l.id !== id));
+    try {
+      await listingService.toggleFavorite(id);
+    } catch {
+      fetchFavorites(); // re-fetch to restore state if API fails
+    }
+  }, [fetchFavorites]);
+
+  return { listings, loading, error, refetch: fetchFavorites, removeFavorite };
 }

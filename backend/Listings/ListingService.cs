@@ -19,16 +19,19 @@ namespace OpenSpot.Listings.Services
             _geocoding = geocoding;
         }
 
-        public async Task<ServiceResult<List<GetListingDto>?>> GetListingsAsync(CancellationToken token)
+        public async Task<ServiceResult<List<GetListingDto>?>> GetListingsAsync(string? requesterId, CancellationToken token)
         {
             var listings = await _context.Listing
                 .Include(l => l.Images)
                 .OrderByDescending(l => l.CreatedAt)
                 .ToListAsync(token);
-            return ServiceResult<List<GetListingDto>?>.Ok(listings.Select(l => new GetListingDto(l)).ToList());
+
+            var favoriteIds = await GetFavoriteIdsAsync(requesterId, token);
+            return ServiceResult<List<GetListingDto>?>.Ok(
+                listings.Select(l => new GetListingDto(l, favoriteIds?.Contains(l.Id))).ToList());
         }
 
-        public async Task<ServiceResult<GetListingDto?>> GetListingByIdAsync(Guid id, CancellationToken token)
+        public async Task<ServiceResult<GetListingDto?>> GetListingByIdAsync(Guid id, string? requesterId, CancellationToken token)
         {
             var listing = await _context.Listing
                 .Include(l => l.Images)
@@ -36,7 +39,12 @@ namespace OpenSpot.Listings.Services
             if (listing is null)
                 return ServiceResult<GetListingDto?>.Fail("Listing not found.", ResultStatus.NotFound);
 
-            return ServiceResult<GetListingDto?>.Ok(new GetListingDto(listing));
+            bool? isFavorited = null;
+            if (requesterId != null)
+                isFavorited = await _context.UserFavorites
+                    .AnyAsync(f => f.UserId == requesterId && f.ListingId == id, token);
+
+            return ServiceResult<GetListingDto?>.Ok(new GetListingDto(listing, isFavorited));
         }
 
         public async Task<ServiceResult<List<GetListingDto>?>> GetMyListingsAsync(string ownerId, CancellationToken token)
@@ -139,7 +147,7 @@ namespace OpenSpot.Listings.Services
         }
 
         public async Task<ServiceResult<List<GetListingDto>?>> SearchListingsAsync(
-            string? q, double? lat, double? lng, double radiusKm, CancellationToken token)
+            string? q, double? lat, double? lng, double radiusKm, string? requesterId, CancellationToken token)
         {
             var query = _context.Listing.Include(l => l.Images).AsQueryable();
 
@@ -161,7 +169,58 @@ namespace OpenSpot.Listings.Services
                     .ToList();
             }
 
-            return ServiceResult<List<GetListingDto>?>.Ok(listings.Select(l => new GetListingDto(l)).ToList());
+            var favoriteIds = await GetFavoriteIdsAsync(requesterId, token);
+            return ServiceResult<List<GetListingDto>?>.Ok(
+                listings.Select(l => new GetListingDto(l, favoriteIds?.Contains(l.Id))).ToList());
+        }
+
+        public async Task<ServiceResult<bool?>> ToggleFavoriteAsync(string userId, Guid listingId, CancellationToken token)
+        {
+            var listingExists = await _context.Listing.AnyAsync(l => l.Id == listingId, token);
+            if (!listingExists)
+                return ServiceResult<bool?>.Fail("Listing not found.", ResultStatus.NotFound);
+
+            var existing = await _context.UserFavorites
+                .FirstOrDefaultAsync(f => f.UserId == userId && f.ListingId == listingId, token);
+
+            if (existing != null)
+            {
+                _context.UserFavorites.Remove(existing);
+                await _context.SaveChangesAsync(token);
+                return ServiceResult<bool?>.Ok(false);
+            }
+
+            await _context.UserFavorites.AddAsync(new UserFavorite
+            {
+                UserId = userId,
+                ListingId = listingId,
+                CreatedAt = DateTime.UtcNow,
+            }, token);
+            await _context.SaveChangesAsync(token);
+            return ServiceResult<bool?>.Ok(true);
+        }
+
+        public async Task<ServiceResult<List<GetListingDto>?>> GetFavoritesAsync(string userId, CancellationToken token)
+        {
+            var listings = await _context.UserFavorites
+                .Where(f => f.UserId == userId)
+                .Include(f => f.Listing).ThenInclude(l => l.Images)
+                .Select(f => f.Listing)
+                .OrderByDescending(l => l.CreatedAt)
+                .ToListAsync(token);
+
+            return ServiceResult<List<GetListingDto>?>.Ok(
+                listings.Select(l => new GetListingDto(l, true)).ToList());
+        }
+
+        private async Task<HashSet<Guid>?> GetFavoriteIdsAsync(string? userId, CancellationToken token)
+        {
+            if (userId == null) return null;
+            var ids = await _context.UserFavorites
+                .Where(f => f.UserId == userId)
+                .Select(f => f.ListingId)
+                .ToListAsync(token);
+            return ids.ToHashSet();
         }
 
         private static double HaversineKm(double lat1, double lon1, double lat2, double lon2)

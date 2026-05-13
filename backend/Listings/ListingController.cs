@@ -21,22 +21,11 @@ namespace OpenSpot.Listings.Controllers
         [HttpGet]
         public async Task<IActionResult> GetListings(CancellationToken token)
         {
-            var result = await _listingService.GetListingsAsync(token);
+            var requesterId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var result = await _listingService.GetListingsAsync(requesterId, token);
             return result.Status switch
             {
                 ResultStatus.Ok => Ok(result.Data),
-                _ => StatusCode(500, "Unexpected error.")
-            };
-        }
-
-        [HttpGet("{id:guid}")]
-        public async Task<IActionResult> GetListing(Guid id, CancellationToken token)
-        {
-            var result = await _listingService.GetListingByIdAsync(id, token);
-            return result.Status switch
-            {
-                ResultStatus.Ok => Ok(result.Data),
-                ResultStatus.NotFound => NotFound(result.Message),
                 _ => StatusCode(500, "Unexpected error.")
             };
         }
@@ -49,10 +38,24 @@ namespace OpenSpot.Listings.Controllers
             [FromQuery] double radius = 5,
             CancellationToken token = default)
         {
-            var result = await _listingService.SearchListingsAsync(q, lat, lng, radius, token);
+            var requesterId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var result = await _listingService.SearchListingsAsync(q, lat, lng, radius, requesterId, token);
             return result.Status switch
             {
                 ResultStatus.Ok => Ok(result.Data),
+                _ => StatusCode(500, "Unexpected error.")
+            };
+        }
+
+        [HttpGet("{id:guid}")]
+        public async Task<IActionResult> GetListing(Guid id, CancellationToken token)
+        {
+            var requesterId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var result = await _listingService.GetListingByIdAsync(id, requesterId, token);
+            return result.Status switch
+            {
+                ResultStatus.Ok => Ok(result.Data),
+                ResultStatus.NotFound => NotFound(result.Message),
                 _ => StatusCode(500, "Unexpected error.")
             };
         }
@@ -66,6 +69,33 @@ namespace OpenSpot.Listings.Controllers
             return result.Status switch
             {
                 ResultStatus.Ok => Ok(result.Data),
+                _ => StatusCode(500, "Unexpected error.")
+            };
+        }
+
+        [Authorize]
+        [HttpGet("favorites")]
+        public async Task<IActionResult> GetFavorites(CancellationToken token)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var result = await _listingService.GetFavoritesAsync(userId, token);
+            return result.Status switch
+            {
+                ResultStatus.Ok => Ok(result.Data),
+                _ => StatusCode(500, "Unexpected error.")
+            };
+        }
+
+        [Authorize]
+        [HttpPost("{id:guid}/favorite")]
+        public async Task<IActionResult> ToggleFavorite(Guid id, CancellationToken token)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var result = await _listingService.ToggleFavoriteAsync(userId, id, token);
+            return result.Status switch
+            {
+                ResultStatus.Ok => Ok(new { isFavorited = result.Data }),
+                ResultStatus.NotFound => NotFound(result.Message),
                 _ => StatusCode(500, "Unexpected error.")
             };
         }
@@ -129,7 +159,7 @@ namespace OpenSpot.Listings.Controllers
 
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
 
-            var listing = await _listingService.GetListingByIdAsync(id, token);
+            var listing = await _listingService.GetListingByIdAsync(id, null, token);
             if (listing.Status == ResultStatus.NotFound)
                 return NotFound("Listing not found.");
             if (listing.Data!.OwnerId != userId)

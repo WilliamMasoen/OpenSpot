@@ -11,6 +11,7 @@ export interface Listing {
   ownerId: string;
   latitude?: number | null;
   longitude?: number | null;
+  isFavorited?: boolean | null;
   imageUrls: string[];
 }
 

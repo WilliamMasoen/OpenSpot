@@ -29,9 +29,11 @@ namespace OpenSpot.Listings.DTOs
 
         public double? Longitude { get; set; }
 
+        public bool? IsFavorited { get; set; }
+
         public List<string> ImageUrls { get; set; } = new();
 
-        public GetListingDto(Listing listing)
+        public GetListingDto(Listing listing, bool? isFavorited = null)
         {
             Id = listing.Id;
             Title = listing.Title;
@@ -45,6 +47,7 @@ namespace OpenSpot.Listings.DTOs
             OwnerId = listing.OwnerId;
             Latitude = listing.Latitude;
             Longitude = listing.Longitude;
+            IsFavorited = isFavorited;
             ImageUrls = listing.Images?.Select(i => i.Url).ToList() ?? new();
         }
 
