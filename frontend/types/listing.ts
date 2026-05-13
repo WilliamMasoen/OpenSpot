@@ -9,6 +9,8 @@ export interface Listing {
   isAvailable: boolean;
   createdAt: string;
   ownerId: string;
+  latitude?: number | null;
+  longitude?: number | null;
   imageUrls: string[];
 }
 
@@ -19,6 +21,8 @@ export interface CreateListingRequest {
   price: number;
   startDate: string;
   endDate: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface UpdateListingRequest extends CreateListingRequest {

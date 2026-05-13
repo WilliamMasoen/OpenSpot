@@ -41,6 +41,22 @@ namespace OpenSpot.Listings.Controllers
             };
         }
 
+        [HttpGet("search")]
+        public async Task<IActionResult> SearchListings(
+            [FromQuery] string? q,
+            [FromQuery] double? lat,
+            [FromQuery] double? lng,
+            [FromQuery] double radius = 5,
+            CancellationToken token = default)
+        {
+            var result = await _listingService.SearchListingsAsync(q, lat, lng, radius, token);
+            return result.Status switch
+            {
+                ResultStatus.Ok => Ok(result.Data),
+                _ => StatusCode(500, "Unexpected error.")
+            };
+        }
+
         [Authorize]
         [HttpGet("mine")]
         public async Task<IActionResult> GetMyListings(CancellationToken token)

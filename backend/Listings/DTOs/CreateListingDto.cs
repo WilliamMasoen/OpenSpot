@@ -22,5 +22,11 @@ namespace OpenSpot.Listings.DTOs
 
         [Required]
         public DateOnly EndDate { get; set; }
+
+        // Pre-resolved coordinates from the client's address autocomplete.
+        // When provided, geocoding is skipped.
+        public double? Latitude { get; set; }
+
+        public double? Longitude { get; set; }
     }
 }

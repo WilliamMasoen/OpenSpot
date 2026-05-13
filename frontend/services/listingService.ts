@@ -28,6 +28,15 @@ export const listingService = {
   delete: (id: string) =>
     apiClient.delete<void>(`/api/listings/${id}`),
 
+  search: (params: { q?: string; lat?: number; lng?: number; radius?: number }) => {
+    const qs = new URLSearchParams();
+    if (params.q) qs.set('q', params.q);
+    if (params.lat != null) qs.set('lat', params.lat.toString());
+    if (params.lng != null) qs.set('lng', params.lng.toString());
+    if (params.radius != null) qs.set('radius', params.radius.toString());
+    return apiClient.get<Listing[]>(`/api/listings/search?${qs.toString()}`);
+  },
+
   uploadImage: async (listingId: string, imageUri: string): Promise<{ url: string }> => {
     const token = useAuthStore.getState().accessToken;
     const filename = imageUri.split('/').pop() ?? 'image.jpg';

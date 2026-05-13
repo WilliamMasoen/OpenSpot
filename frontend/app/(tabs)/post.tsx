@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Input } from '@/components/ui/Input';
+import { AddressAutocomplete } from '@/components/ui/AddressAutocomplete';
 import { Button } from '@/components/ui/Button';
 import { DatePickerField } from '@/components/ui/DatePickerField';
 import { useCreateListing } from '@/hooks/useListings';
@@ -23,13 +24,22 @@ const EMPTY_FORM = {
 
 export default function PostScreen() {
   const [form, setForm] = useState(EMPTY_FORM);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [images, setImages] = useState<string[]>([]);
   const { createListing, loading, error, clearError } = useCreateListing();
 
   const set = (field: keyof typeof form) => (value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+    if (field === 'address') setCoords(null); // clear coords on manual edit
     if (fieldErrors[field]) setFieldErrors((prev) => ({ ...prev, [field]: '' }));
+    clearError();
+  };
+
+  const handleAddressSelect = (address: string, lat: number, lng: number) => {
+    setForm((prev) => ({ ...prev, address }));
+    setCoords({ lat, lng });
+    if (fieldErrors.address) setFieldErrors((prev) => ({ ...prev, address: '' }));
     clearError();
   };
 
@@ -81,6 +91,7 @@ export default function PostScreen() {
         style: 'destructive',
         onPress: () => {
           setForm(EMPTY_FORM);
+          setCoords(null);
           setImages([]);
           setFieldErrors({});
           clearError();
@@ -101,12 +112,15 @@ export default function PostScreen() {
         price: parseInt(form.price, 10),
         startDate: form.startDate,
         endDate: form.endDate,
+        latitude: coords?.lat,
+        longitude: coords?.lng,
       },
       images
     );
 
     if (listing) {
       setForm(EMPTY_FORM);
+      setCoords(null);
       setImages([]);
       setFieldErrors({});
       markListingsStale();
@@ -147,14 +161,12 @@ export default function PostScreen() {
             error={fieldErrors.title}
             autoCapitalize="sentences"
           />
-          <Input
+          <AddressAutocomplete
             label="Address"
             value={form.address}
             onChangeText={set('address')}
-            placeholder="e.g. 123 Bay St, Toronto, ON"
+            onSelectAddress={handleAddressSelect}
             error={fieldErrors.address}
-            textContentType="none"
-            autoComplete="off"
           />
           <Input
             label="Description (optional)"
@@ -263,6 +275,7 @@ const styles = StyleSheet.create({
   },
   form: {
     gap: theme.spacing.md,
+    zIndex: 1,
   },
   textarea: {
     height: 90,

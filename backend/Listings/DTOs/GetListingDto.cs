@@ -25,6 +25,10 @@ namespace OpenSpot.Listings.DTOs
 
         public string OwnerId { get; set; } = string.Empty;
 
+        public double? Latitude { get; set; }
+
+        public double? Longitude { get; set; }
+
         public List<string> ImageUrls { get; set; } = new();
 
         public GetListingDto(Listing listing)
@@ -39,6 +43,8 @@ namespace OpenSpot.Listings.DTOs
             IsAvailable = listing.IsAvailable;
             CreatedAt = listing.CreatedAt;
             OwnerId = listing.OwnerId;
+            Latitude = listing.Latitude;
+            Longitude = listing.Longitude;
             ImageUrls = listing.Images?.Select(i => i.Url).ToList() ?? new();
         }
 

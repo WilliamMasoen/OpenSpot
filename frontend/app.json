@@ -36,6 +36,12 @@
           "photosPermission": "OpenSpot needs access to your photos to upload parking spot images."
         }
       ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "OpenSpot needs your location to find nearby parking spots."
+        }
+      ],
       "@react-native-community/datetimepicker"
     ]
   }

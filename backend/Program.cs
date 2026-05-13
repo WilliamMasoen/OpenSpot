@@ -9,6 +9,7 @@ using OpenSpot.Config;
 using OpenSpot.Data;
 using OpenSpot.Data.Interfaces;
 using OpenSpot.Email;
+using OpenSpot.Listings.Geocoding;
 using OpenSpot.Listings.Interfaces;
 using OpenSpot.Listings.Services;
 using OpenSpot.Users.Models;
@@ -84,6 +85,11 @@ builder.Services.AddScoped<IApplicationDbContext>(p => p.GetRequiredService<Appl
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IListingService, ListingService>();
+builder.Services.AddHttpClient<IGeocodingService, NominatimGeocodingService>(client =>
+{
+    client.DefaultRequestHeaders.Add("User-Agent", "OpenSpot/1.0 (openspot-app)");
+    client.Timeout = TimeSpan.FromSeconds(5);
+});
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

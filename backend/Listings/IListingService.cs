@@ -12,5 +12,6 @@ namespace OpenSpot.Listings.Interfaces
         Task<ServiceResult<GetListingDto?>> UpdateListingAsync(Guid id, string requesterId, UpdateListingDto dto, CancellationToken token);
         Task<ServiceResult<bool?>> DeleteListingAsync(Guid id, string requesterId, CancellationToken token);
         Task<ServiceResult<string?>> AddImageAsync(Guid listingId, string url, CancellationToken token);
+        Task<ServiceResult<List<GetListingDto>?>> SearchListingsAsync(string? q, double? lat, double? lng, double radiusKm, CancellationToken token);
     }
 }
