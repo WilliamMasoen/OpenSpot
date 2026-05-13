@@ -198,6 +198,29 @@ namespace backend.Migrations
                     b.ToTable("Listing");
                 });
 
+            modelBuilder.Entity("OpenSpot.Listings.Models.ListingImage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ListingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ListingId");
+
+                    b.ToTable("ListingImages");
+                });
+
             modelBuilder.Entity("OpenSpot.RefreshTokens.RefreshToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -362,6 +385,17 @@ namespace backend.Migrations
                     b.Navigation("Owner");
                 });
 
+            modelBuilder.Entity("OpenSpot.Listings.Models.ListingImage", b =>
+                {
+                    b.HasOne("OpenSpot.Listings.Models.Listing", "Listing")
+                        .WithMany("Images")
+                        .HasForeignKey("ListingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Listing");
+                });
+
             modelBuilder.Entity("OpenSpot.RefreshTokens.RefreshToken", b =>
                 {
                     b.HasOne("OpenSpot.Users.Models.User", "User")
@@ -371,6 +405,11 @@ namespace backend.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("OpenSpot.Listings.Models.Listing", b =>
+                {
+                    b.Navigation("Images");
                 });
 #pragma warning restore 612, 618
         }

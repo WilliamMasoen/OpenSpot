@@ -18,17 +18,32 @@ namespace OpenSpot.Listings.Services
 
         public async Task<ServiceResult<List<GetListingDto>?>> GetListingsAsync(CancellationToken token)
         {
-            var listings = await _context.Listing.ToListAsync(token);
+            var listings = await _context.Listing
+                .Include(l => l.Images)
+                .OrderByDescending(l => l.CreatedAt)
+                .ToListAsync(token);
             return ServiceResult<List<GetListingDto>?>.Ok(listings.Select(l => new GetListingDto(l)).ToList());
         }
 
         public async Task<ServiceResult<GetListingDto?>> GetListingByIdAsync(Guid id, CancellationToken token)
         {
-            var listing = await _context.Listing.FindAsync([id], token);
+            var listing = await _context.Listing
+                .Include(l => l.Images)
+                .FirstOrDefaultAsync(l => l.Id == id, token);
             if (listing is null)
                 return ServiceResult<GetListingDto?>.Fail("Listing not found.", ResultStatus.NotFound);
 
             return ServiceResult<GetListingDto?>.Ok(new GetListingDto(listing));
+        }
+
+        public async Task<ServiceResult<List<GetListingDto>?>> GetMyListingsAsync(string ownerId, CancellationToken token)
+        {
+            var listings = await _context.Listing
+                .Include(l => l.Images)
+                .Where(l => l.OwnerId == ownerId)
+                .OrderByDescending(l => l.CreatedAt)
+                .ToListAsync(token);
+            return ServiceResult<List<GetListingDto>?>.Ok(listings.Select(l => new GetListingDto(l)).ToList());
         }
 
         public async Task<ServiceResult<GetListingDto?>> CreateNewListingAsync(string ownerId, CreateListingDto dto, CancellationToken token)
@@ -89,6 +104,24 @@ namespace OpenSpot.Listings.Services
             _context.Listing.Remove(listing);
             await _context.SaveChangesAsync(token);
             return ServiceResult<bool?>.NoContent();
+        }
+
+        public async Task<ServiceResult<string?>> AddImageAsync(Guid listingId, string url, CancellationToken token)
+        {
+            var exists = await _context.Listing.AnyAsync(l => l.Id == listingId, token);
+            if (!exists)
+                return ServiceResult<string?>.Fail("Listing not found.", ResultStatus.NotFound);
+
+            var image = new ListingImage
+            {
+                ListingId = listingId,
+                Url = url,
+                CreatedAt = DateTime.UtcNow,
+            };
+
+            await _context.ListingImages.AddAsync(image, token);
+            await _context.SaveChangesAsync(token);
+            return ServiceResult<string?>.Created(url);
         }
     }
 }

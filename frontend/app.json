@@ -29,7 +29,14 @@
     },
     "plugins": [
       "expo-router",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "OpenSpot needs access to your photos to upload parking spot images."
+        }
+      ],
+      "@react-native-community/datetimepicker"
     ]
   }
 }

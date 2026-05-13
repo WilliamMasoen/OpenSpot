@@ -42,6 +42,19 @@ namespace OpenSpot.Listings.Controllers
         }
 
         [Authorize]
+        [HttpGet("mine")]
+        public async Task<IActionResult> GetMyListings(CancellationToken token)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var result = await _listingService.GetMyListingsAsync(userId, token);
+            return result.Status switch
+            {
+                ResultStatus.Ok => Ok(result.Data),
+                _ => StatusCode(500, "Unexpected error.")
+            };
+        }
+
+        [Authorize]
         [HttpPost]
         public async Task<IActionResult> CreateListing([FromBody] CreateListingDto dto, CancellationToken token)
         {
@@ -87,6 +100,41 @@ namespace OpenSpot.Listings.Controllers
                 ResultStatus.NoContent => NoContent(),
                 ResultStatus.NotFound => NotFound(result.Message),
                 ResultStatus.Forbidden => StatusCode(403, result.Message),
+                _ => StatusCode(500, "Unexpected error.")
+            };
+        }
+
+        [Authorize]
+        [HttpPost("{id:guid}/images")]
+        public async Task<IActionResult> UploadImage(Guid id, IFormFile file, CancellationToken token)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest("No file provided.");
+
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+
+            var listing = await _listingService.GetListingByIdAsync(id, token);
+            if (listing.Status == ResultStatus.NotFound)
+                return NotFound("Listing not found.");
+            if (listing.Data!.OwnerId != userId)
+                return StatusCode(403, "You do not own this listing.");
+
+            var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+            var filename = $"{Guid.NewGuid()}{ext}";
+            var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", id.ToString());
+            Directory.CreateDirectory(uploadsDir);
+
+            var filePath = Path.Combine(uploadsDir, filename);
+            using (var stream = System.IO.File.Create(filePath))
+                await file.CopyToAsync(stream, token);
+
+            var url = $"{Request.Scheme}://{Request.Host}/uploads/{id}/{filename}";
+            var result = await _listingService.AddImageAsync(id, url, token);
+
+            return result.Status switch
+            {
+                ResultStatus.Created => StatusCode(201, new { url }),
+                ResultStatus.NotFound => NotFound(result.Message),
                 _ => StatusCode(500, "Unexpected error.")
             };
         }

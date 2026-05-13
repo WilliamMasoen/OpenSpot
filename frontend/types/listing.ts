@@ -9,6 +9,7 @@ export interface Listing {
   isAvailable: boolean;
   createdAt: string;
   ownerId: string;
+  imageUrls: string[];
 }
 
 export interface CreateListingRequest {

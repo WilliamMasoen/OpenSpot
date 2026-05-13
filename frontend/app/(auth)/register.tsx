@@ -95,7 +95,8 @@ export default function RegisterScreen() {
             onChangeText={set('password')}
             placeholder="At least 6 characters"
             secureTextEntry
-            textContentType="newPassword"
+            textContentType="none"
+            autoComplete="off"
             error={fieldErrors.password}
           />
           <Input

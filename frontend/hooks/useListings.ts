@@ -27,15 +27,63 @@ export function useListings() {
   return { listings, loading, error, refetch: fetchListings };
 }
 
+export function useMyListings() {
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchMyListings = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await listingService.getMine();
+      setListings(data);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load your listings.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchMyListings();
+  }, [fetchMyListings]);
+
+  const deleteListing = async (id: string): Promise<boolean> => {
+    try {
+      await listingService.delete(id);
+      setListings((prev) => prev.filter((l) => l.id !== id));
+      return true;
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to delete listing.');
+      return false;
+    }
+  };
+
+  return { listings, loading, error, refetch: fetchMyListings, deleteListing };
+}
+
 export function useCreateListing() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const createListing = async (dto: CreateListingRequest): Promise<Listing | null> => {
+  const createListing = async (
+    dto: CreateListingRequest,
+    imageUris: string[] = []
+  ): Promise<Listing | null> => {
     setLoading(true);
     setError(null);
     try {
-      return await listingService.create(dto);
+      const listing = await listingService.create(dto);
+      // Upload images sequentially after listing is created
+      for (const uri of imageUris) {
+        try {
+          await listingService.uploadImage(listing.id, uri);
+        } catch {
+          // Non-fatal: listing created, image upload failed
+        }
+      }
+      return listing;
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to create listing.');
       return null;

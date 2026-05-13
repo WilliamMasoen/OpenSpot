@@ -1,24 +1,30 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, Alert } from 'react-native';
+import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { router } from 'expo-router';
-import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
+import * as ImagePicker from 'expo-image-picker';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { DatePickerField } from '@/components/ui/DatePickerField';
 import { useCreateListing } from '@/hooks/useListings';
 import { theme } from '@/constants/theme';
+import { markListingsStale } from '@/utils/refreshFlags';
 
-const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_IMAGES = 5;
+
+const EMPTY_FORM = {
+  title: '',
+  description: '',
+  address: '',
+  price: '',
+  startDate: '',
+  endDate: '',
+};
 
 export default function PostScreen() {
-  const [form, setForm] = useState({
-    title: '',
-    description: '',
-    address: '',
-    price: '',
-    startDate: '',
-    endDate: '',
-  });
+  const [form, setForm] = useState(EMPTY_FORM);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [images, setImages] = useState<string[]>([]);
   const { createListing, loading, error, clearError } = useCreateListing();
 
   const set = (field: keyof typeof form) => (value: string) => {
@@ -27,47 +33,108 @@ export default function PostScreen() {
     clearError();
   };
 
+  const pickImages = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'Please allow access to your photo library in Settings.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: true,
+      selectionLimit: MAX_IMAGES - images.length,
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setImages((prev) => [...prev, ...result.assets.map((a) => a.uri)].slice(0, MAX_IMAGES));
+    }
+  };
+
+  const removeImage = (uri: string) => {
+    setImages((prev) => prev.filter((u) => u !== uri));
+  };
+
   const validate = () => {
     const errors: Record<string, string> = {};
     if (!form.title.trim()) errors.title = 'Title is required.';
     if (!form.address.trim()) errors.address = 'Address is required.';
     const price = parseInt(form.price, 10);
     if (!form.price || isNaN(price) || price <= 0) errors.price = 'Enter a valid monthly price.';
-    if (!DATE_REGEX.test(form.startDate)) errors.startDate = 'Use format YYYY-MM-DD.';
-    if (!DATE_REGEX.test(form.endDate)) errors.endDate = 'Use format YYYY-MM-DD.';
-    if (DATE_REGEX.test(form.startDate) && DATE_REGEX.test(form.endDate)) {
-      if (form.endDate <= form.startDate) errors.endDate = 'End date must be after start date.';
-    }
+    if (!form.startDate) errors.startDate = 'Select a start date.';
+    if (!form.endDate) errors.endDate = 'Select an end date.';
+    if (form.startDate && form.endDate && form.endDate <= form.startDate)
+      errors.endDate = 'End date must be after start date.';
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
+  };
+
+  const hasFormData = Object.values(form).some((v) => v.trim() !== '') || images.length > 0;
+
+  const handleDiscard = () => {
+    if (!hasFormData) return;
+    Alert.alert('Discard listing?', 'All your changes will be lost.', [
+      { text: 'Keep editing', style: 'cancel' },
+      {
+        text: 'Discard',
+        style: 'destructive',
+        onPress: () => {
+          setForm(EMPTY_FORM);
+          setImages([]);
+          setFieldErrors({});
+          clearError();
+        },
+      },
+    ]);
   };
 
   const handlePost = async () => {
     if (!validate()) return;
     clearError();
 
-    const listing = await createListing({
-      title: form.title.trim(),
-      description: form.description.trim(),
-      address: form.address.trim(),
-      price: parseInt(form.price, 10),
-      startDate: form.startDate,
-      endDate: form.endDate,
-    });
+    const listing = await createListing(
+      {
+        title: form.title.trim(),
+        description: form.description.trim(),
+        address: form.address.trim(),
+        price: parseInt(form.price, 10),
+        startDate: form.startDate,
+        endDate: form.endDate,
+      },
+      images
+    );
 
     if (listing) {
-      Alert.alert('Posted!', `"${listing.title}" is now live.`, [
-        { text: 'View listings', onPress: () => router.replace('/(tabs)') },
-        { text: 'Post another', onPress: () => setForm({ title: '', description: '', address: '', price: '', startDate: '', endDate: '' }) },
-      ]);
+      setForm(EMPTY_FORM);
+      setImages([]);
+      setFieldErrors({});
+      markListingsStale();
+      router.replace('/(tabs)');
     }
   };
 
   return (
-    <ScreenWrapper withKeyboard scrollable>
-      <View style={styles.container}>
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+      >
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.header}>
-          <Text style={styles.title}>Post a spot</Text>
+          <View style={styles.headerRow}>
+            <Text style={styles.title}>Post a spot</Text>
+            {hasFormData && (
+              <TouchableOpacity onPress={handleDiscard} hitSlop={8}>
+                <Text style={styles.discardLink}>Discard</Text>
+              </TouchableOpacity>
+            )}
+          </View>
           <Text style={styles.subtitle}>Fill in the details for your parking spot.</Text>
         </View>
 
@@ -86,7 +153,8 @@ export default function PostScreen() {
             onChangeText={set('address')}
             placeholder="e.g. 123 Bay St, Toronto, ON"
             error={fieldErrors.address}
-            autoCapitalize="words"
+            textContentType="none"
+            autoComplete="off"
           />
           <Input
             label="Description (optional)"
@@ -109,35 +177,64 @@ export default function PostScreen() {
 
           <View style={styles.dateRow}>
             <View style={styles.dateField}>
-              <Input
+              <DatePickerField
                 label="Available from"
                 value={form.startDate}
-                onChangeText={set('startDate')}
-                placeholder="YYYY-MM-DD"
+                onChange={set('startDate')}
                 error={fieldErrors.startDate}
+                minimumDate={new Date()}
               />
             </View>
             <View style={styles.dateField}>
-              <Input
+              <DatePickerField
                 label="Available until"
                 value={form.endDate}
-                onChangeText={set('endDate')}
-                placeholder="YYYY-MM-DD"
+                onChange={set('endDate')}
                 error={fieldErrors.endDate}
+                minimumDate={form.startDate ? new Date(`${form.startDate}T00:00:00`) : new Date()}
               />
             </View>
           </View>
 
+          {/* Photos */}
+          <View style={styles.photosSection}>
+            <Text style={styles.photosLabel}>Photos ({images.length}/{MAX_IMAGES})</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photosScroll}>
+              {images.map((uri) => (
+                <TouchableOpacity key={uri} onPress={() => removeImage(uri)} style={styles.photoWrap}>
+                  <Image source={{ uri }} style={styles.photoThumb} />
+                  <View style={styles.photoRemove}>
+                    <Text style={styles.photoRemoveText}>✕</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+              {images.length < MAX_IMAGES && (
+                <TouchableOpacity style={styles.photoAdd} onPress={pickImages}>
+                  <Text style={styles.photoAddIcon}>+</Text>
+                  <Text style={styles.photoAddLabel}>Add</Text>
+                </TouchableOpacity>
+              )}
+            </ScrollView>
+          </View>
+
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <Button label="Post Spot" onPress={handlePost} loading={loading} />
+          <Button label={loading ? 'Posting…' : 'Post Spot'} onPress={handlePost} loading={loading} />
         </View>
-      </View>
-    </ScreenWrapper>
+      </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+  },
+  flex: {
+    flex: 1,
+  },
   container: {
     paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.lg,
@@ -145,6 +242,16 @@ const styles = StyleSheet.create({
   },
   header: {
     gap: theme.spacing.xs,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  discardLink: {
+    fontSize: 14,
+    color: theme.colors.error,
+    fontWeight: '500',
   },
   title: {
     ...theme.typography.heading,
@@ -168,6 +275,61 @@ const styles = StyleSheet.create({
   },
   dateField: {
     flex: 1,
+  },
+  photosSection: {
+    gap: theme.spacing.xs,
+  },
+  photosLabel: {
+    ...theme.typography.label,
+    color: theme.colors.text,
+  },
+  photosScroll: {
+    marginTop: 4,
+  },
+  photoWrap: {
+    position: 'relative',
+    marginRight: theme.spacing.sm,
+  },
+  photoThumb: {
+    width: 80,
+    height: 80,
+    borderRadius: theme.radius.md,
+  },
+  photoRemove: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoRemoveText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  photoAdd: {
+    width: 80,
+    height: 80,
+    borderRadius: theme.radius.md,
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  photoAddIcon: {
+    fontSize: 22,
+    color: theme.colors.textMuted,
+  },
+  photoAddLabel: {
+    fontSize: 11,
+    color: theme.colors.textMuted,
+    fontWeight: '500',
   },
   error: {
     fontSize: 13,

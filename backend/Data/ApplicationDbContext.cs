@@ -16,6 +16,7 @@ namespace OpenSpot.Data
 
         public DbSet<User> User { get; set; }
         public DbSet<Listing> Listing { get; set; }
+        public DbSet<ListingImage> ListingImages { get; set; }
         public DbSet<RefreshToken> RefreshTokens { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)

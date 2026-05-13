@@ -1,9 +1,12 @@
+import { useCallback } from 'react';
 import { View, Text, FlatList, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { ListingCard } from '@/components/ui/ListingCard';
 import { useListings } from '@/hooks/useListings';
 import { theme } from '@/constants/theme';
 import { Listing } from '@/types/listing';
+import { consumeListingsStale } from '@/utils/refreshFlags';
 
 function EmptyState() {
   return (
@@ -28,6 +31,8 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
 export default function HomeScreen() {
   const { listings, loading, error, refetch } = useListings();
 
+  useFocusEffect(useCallback(() => { if (consumeListingsStale()) refetch(); }, [refetch]));
+
   if (loading && listings.length === 0) {
     return (
       <ScreenWrapper>
@@ -51,9 +56,16 @@ export default function HomeScreen() {
       <FlatList<Listing>
         data={listings}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <ListingCard listing={item} />}
+        numColumns={2}
+        columnWrapperStyle={styles.row}
+        renderItem={({ item }) => (
+          <ListingCard
+            listing={item}
+            variant="tile"
+            onPress={() => router.push(`/listing/${item.id}`)}
+          />
+        )}
         contentContainerStyle={styles.list}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
         ListHeaderComponent={
           <View style={styles.listHeader}>
             <Text style={styles.heading}>Available Spots</Text>
@@ -84,6 +96,10 @@ const styles = StyleSheet.create({
     padding: theme.spacing.md,
     paddingBottom: theme.spacing.xl,
   },
+  row: {
+    gap: theme.spacing.sm,
+    marginBottom: theme.spacing.sm,
+  },
   listHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -98,9 +114,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: theme.colors.textMuted,
     fontWeight: '500',
-  },
-  separator: {
-    height: theme.spacing.sm,
   },
   emptyState: {
     flex: 1,

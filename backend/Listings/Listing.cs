@@ -27,5 +27,7 @@ namespace OpenSpot.Listings.Models
 
         [ForeignKey("OwnerId")]
         public User Owner { get; set; } = null!;
+
+        public ICollection<ListingImage> Images { get; set; } = new List<ListingImage>();
     }
 }
