@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
-import { View, TouchableOpacity, StyleSheet, GestureResponderEvent } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useChatStore } from '@/store/chatStore';
 import { theme } from '@/constants/theme';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -12,6 +13,20 @@ function TabIcon({ name, focused }: { name: IoniconName; focused: boolean }) {
       size={24}
       color={focused ? theme.colors.primary : theme.colors.textMuted}
     />
+  );
+}
+
+function ChatTabIcon({ focused }: { focused: boolean }) {
+  const unreadCount = useChatStore((s) => s.unreadCount);
+  return (
+    <View>
+      <TabIcon name="chatbubble" focused={focused} />
+      {unreadCount > 0 && (
+        <View style={styles.tabBadge}>
+          <Text style={styles.tabBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -75,7 +90,7 @@ export default function TabsLayout() {
         name="chat"
         options={{
           title: 'Chat',
-          tabBarIcon: ({ focused }) => <TabIcon name="chatbubble" focused={focused} />,
+          tabBarIcon: ({ focused }) => <ChatTabIcon focused={focused} />,
         }}
       />
       <Tabs.Screen
@@ -111,5 +126,22 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.45,
     shadowRadius: 10,
     elevation: 8,
+  },
+  tabBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -8,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#EF4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  tabBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#fff',
   },
 });

@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Image, ActivityIndicator,
-  TouchableOpacity, Dimensions, Alert,
+  TouchableOpacity, Dimensions,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { listingService } from '@/services/listingService';
+import { chatService } from '@/services/chatService';
 import { useAuthStore } from '@/store/authStore';
 import { Listing } from '@/types/listing';
 import { theme } from '@/constants/theme';
@@ -35,6 +36,7 @@ export default function ListingDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
+  const [messageLoading, setMessageLoading] = useState(false);
   const user = useAuthStore((s) => s.user);
 
   useEffect(() => {
@@ -166,13 +168,36 @@ export default function ListingDetailScreen() {
           {/* CTA */}
           {!isOwner && (
             <TouchableOpacity
-              style={[styles.ctaButton, !listing.isAvailable && styles.ctaButtonDisabled]}
-              disabled={!listing.isAvailable}
-              onPress={() => Alert.alert('Coming soon', 'In-app messaging is coming in the next update.')}
+              style={[styles.ctaButton, (!listing.isAvailable || messageLoading) && styles.ctaButtonDisabled]}
+              disabled={!listing.isAvailable || messageLoading}
+              onPress={async () => {
+                if (messageLoading) return;
+                setMessageLoading(true);
+                try {
+                  const conv = await chatService.getOrCreateConversation(listing.id);
+                  router.push({
+                    pathname: `/conversation/${conv.id}` as `${string}`,
+                    params: {
+                      title: conv.otherUserName,
+                      subtitle: listing.title,
+                      listingId: listing.id,
+                      listingImageUrl: listing.imageUrls[0] ?? '',
+                    },
+                  });
+                } catch {
+                  // silently ignore — user can retry
+                } finally {
+                  setMessageLoading(false);
+                }
+              }}
             >
-              <Text style={styles.ctaButtonText}>
-                {listing.isAvailable ? 'Message Owner' : 'No longer available'}
-              </Text>
+              {messageLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.ctaButtonText}>
+                  {listing.isAvailable ? 'Message Owner' : 'No longer available'}
+                </Text>
+              )}
             </TouchableOpacity>
           )}
 

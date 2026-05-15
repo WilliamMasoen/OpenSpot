@@ -2,6 +2,9 @@ import { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useAuthStore, REFRESH_TOKEN_KEY } from '@/store/authStore';
 import { authService } from '@/services/authService';
+import { signalRService } from '@/services/signalRService';
+import { chatService } from '@/services/chatService';
+import { useChatStore } from '@/store/chatStore';
 import * as SecureStore from 'expo-secure-store';
 import { View, ActivityIndicator } from 'react-native';
 import { theme } from '@/constants/theme';
@@ -27,7 +30,7 @@ function AuthGuard() {
 }
 
 export default function RootLayout() {
-  const { setAuth, clearAuth, setLoading } = useAuthStore();
+  const { setAuth, clearAuth, setLoading, isAuthenticated } = useAuthStore();
 
   useEffect(() => {
     async function hydrate() {
@@ -45,6 +48,20 @@ export default function RootLayout() {
     }
     hydrate();
   }, []);
+
+  const setUnreadCount = useChatStore((s) => s.setUnreadCount);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      signalRService.connect().catch(console.warn);
+      chatService.getConversations()
+        .then((data) => setUnreadCount(data.reduce((sum, c) => sum + c.unreadCount, 0)))
+        .catch(() => {});
+    } else {
+      signalRService.disconnect().catch(console.warn);
+      setUnreadCount(0);
+    }
+  }, [isAuthenticated]);
 
   const { isLoading } = useAuthStore();
 

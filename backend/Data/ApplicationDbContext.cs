@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using OpenSpot.Chat.Models;
 using OpenSpot.Data.Interfaces;
 using OpenSpot.Listings.Models;
 using OpenSpot.RefreshTokens;
@@ -19,12 +20,17 @@ namespace OpenSpot.Data
         public DbSet<ListingImage> ListingImages { get; set; }
         public DbSet<UserFavorite> UserFavorites { get; set; }
         public DbSet<RefreshToken> RefreshTokens { get; set; }
+        public DbSet<Conversation> Conversations { get; set; }
+        public DbSet<Message> Messages { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
             modelBuilder.ApplyConfigurationsFromAssembly(typeof(ApplicationDbContext).Assembly);
             modelBuilder.Entity<UserFavorite>().HasKey(f => new { f.UserId, f.ListingId });
+            modelBuilder.Entity<Conversation>()
+                .HasIndex(c => new { c.ListingId, c.BuyerId })
+                .IsUnique();
         }
     }
 }

@@ -5,6 +5,9 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using OpenSpot.Auth;
+using OpenSpot.Chat.Hubs;
+using OpenSpot.Chat.Interfaces;
+using OpenSpot.Chat.Services;
 using OpenSpot.Config;
 using OpenSpot.Data;
 using OpenSpot.Data.Interfaces;
@@ -76,6 +79,17 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
         ClockSkew = TimeSpan.Zero
     };
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            if (!string.IsNullOrEmpty(accessToken) &&
+                context.HttpContext.Request.Path.StartsWithSegments("/hubs/chat"))
+                context.Token = accessToken;
+            return Task.CompletedTask;
+        }
+    };
 });
 
 // --------------------
@@ -85,11 +99,13 @@ builder.Services.AddScoped<IApplicationDbContext>(p => p.GetRequiredService<Appl
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IListingService, ListingService>();
+builder.Services.AddScoped<IConversationService, ConversationService>();
 builder.Services.AddHttpClient<IGeocodingService, NominatimGeocodingService>(client =>
 {
     client.DefaultRequestHeaders.Add("User-Agent", "OpenSpot/1.0 (openspot-app)");
     client.Timeout = TimeSpan.FromSeconds(5);
 });
+builder.Services.AddSignalR();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -115,6 +131,7 @@ app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<ChatHub>("/hubs/chat");
 
 app.Run();
 
