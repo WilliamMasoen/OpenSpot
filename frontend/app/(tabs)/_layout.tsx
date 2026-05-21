@@ -1,4 +1,4 @@
-import { Tabs } from 'expo-router';
+import { Tabs, router } from 'expo-router';
 import { View, Text, TouchableOpacity, StyleSheet, GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useChatStore } from '@/store/chatStore';
@@ -30,9 +30,9 @@ function ChatTabIcon({ focused }: { focused: boolean }) {
   );
 }
 
-function PostTabButton({ onPress }: { onPress?: (e: GestureResponderEvent) => void }) {
+function PostTabButton({ onPress: _onPress }: { onPress?: (e: GestureResponderEvent) => void }) {
   return (
-    <TouchableOpacity style={styles.postTabContainer} onPress={onPress} activeOpacity={0.85}>
+    <TouchableOpacity style={styles.postTabContainer} onPress={() => router.push('/create')} activeOpacity={0.85}>
       <View style={styles.postButton}>
         <Ionicons name="add" size={30} color="#fff" />
       </View>
