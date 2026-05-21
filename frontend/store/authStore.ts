@@ -13,6 +13,7 @@ interface AuthState {
   setAuth: (tokenResponse: TokenResponse) => Promise<void>;
   clearAuth: () => Promise<void>;
   setLoading: (loading: boolean) => void;
+  updateUser: (updates: Pick<AuthUser, 'firstName' | 'lastName'>) => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -30,6 +31,8 @@ export const useAuthStore = create<AuthState>((set) => ({
       user: {
         userId: tokenResponse.userId,
         email: tokenResponse.email,
+        firstName: tokenResponse.firstName,
+        lastName: tokenResponse.lastName,
         roles: tokenResponse.roles,
       },
       isAuthenticated: true,
@@ -47,4 +50,9 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   setLoading: (loading) => set({ isLoading: loading }),
+
+  updateUser: (updates) =>
+    set((state) => ({
+      user: state.user ? { ...state.user, ...updates } : state.user,
+    })),
 }));

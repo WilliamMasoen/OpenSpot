@@ -1,6 +1,7 @@
 import { View, Text, FlatList, StyleSheet, ActivityIndicator, RefreshControl, Alert, TouchableOpacity, Image } from 'react-native';
 import { router } from 'expo-router';
-import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useMyListings } from '@/hooks/useListings';
 import { Listing } from '@/types/listing';
 import { theme } from '@/constants/theme';
@@ -50,101 +51,108 @@ function MyListingRow({ listing, onDelete }: { listing: Listing; onDelete: () =>
       </View>
 
       <TouchableOpacity style={styles.deleteButton} onPress={confirmDelete} hitSlop={8}>
-        <Text style={styles.deleteIcon}>🗑</Text>
+        <Ionicons name="trash-outline" size={18} color={theme.colors.error} />
       </TouchableOpacity>
     </TouchableOpacity>
-  );
-}
-
-function EmptyState() {
-  return (
-    <View style={styles.emptyState}>
-      <Text style={styles.emptyIcon}>📋</Text>
-      <Text style={styles.emptyTitle}>No listings yet</Text>
-      <Text style={styles.emptyBody}>Tap "Post Spot" to list your first parking spot.</Text>
-    </View>
   );
 }
 
 export default function MyListingsScreen() {
   const { listings, loading, error, refetch, deleteListing } = useMyListings();
 
-  if (loading && listings.length === 0) {
-    return (
-      <ScreenWrapper>
-        <View style={styles.loadingContainer}>
+  return (
+    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} hitSlop={8} style={styles.backBtn}>
+          <Ionicons name="chevron-back" size={24} color={theme.colors.text} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>My Spots</Text>
+        <View style={{ width: 32 }} />
+      </View>
+
+      {loading && listings.length === 0 ? (
+        <View style={styles.centered}>
           <ActivityIndicator color={theme.colors.primary} size="large" />
         </View>
-      </ScreenWrapper>
-    );
-  }
+      ) : (
+        <FlatList<Listing>
+          data={listings}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <MyListingRow listing={item} onDelete={() => deleteListing(item.id)} />
+          )}
+          contentContainerStyle={styles.list}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          ListHeaderComponent={
+            listings.length > 0 ? (
+              <View style={styles.listHeader}>
+                <Text style={styles.count}>{listings.length} listing{listings.length !== 1 ? 's' : ''}</Text>
+              </View>
+            ) : null
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyIcon}>📋</Text>
+              <Text style={styles.emptyTitle}>No listings yet</Text>
+              <Text style={styles.emptyBody}>Tap the + button to list your first parking spot.</Text>
+            </View>
+          }
+          refreshControl={
+            <RefreshControl refreshing={loading} onRefresh={refetch} tintColor={theme.colors.primary} />
+          }
+          showsVerticalScrollIndicator={false}
+        />
+      )}
 
-  return (
-    <ScreenWrapper>
-      <FlatList<Listing>
-        data={listings}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <MyListingRow
-            listing={item}
-            onDelete={() => deleteListing(item.id)}
-          />
-        )}
-        contentContainerStyle={styles.list}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-        ListHeaderComponent={
-          <View style={styles.listHeader}>
-            <Text style={styles.heading}>My Spots</Text>
-            <Text style={styles.count}>{listings.length} listing{listings.length !== 1 ? 's' : ''}</Text>
-          </View>
-        }
-        ListEmptyComponent={<EmptyState />}
-        refreshControl={
-          <RefreshControl
-            refreshing={loading}
-            onRefresh={refetch}
-            tintColor={theme.colors.primary}
-          />
-        }
-        showsVerticalScrollIndicator={false}
-      />
       {error ? (
         <View style={styles.errorBanner}>
           <Text style={styles.errorBannerText}>{error}</Text>
         </View>
       ) : null}
-    </ScreenWrapper>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  loadingContainer: {
+  safe: {
     flex: 1,
-    justifyContent: 'center',
+    backgroundColor: theme.colors.background,
+  },
+  header: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    backgroundColor: theme.colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  backBtn: { padding: 4 },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.text,
+  },
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   list: {
+    flexGrow: 1,
     padding: theme.spacing.md,
     paddingBottom: theme.spacing.xl,
   },
   listHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    marginBottom: theme.spacing.md,
-  },
-  heading: {
-    ...theme.typography.heading,
-    color: theme.colors.text,
+    marginBottom: theme.spacing.sm,
   },
   count: {
     fontSize: 13,
     color: theme.colors.textMuted,
     fontWeight: '500',
   },
-  separator: {
-    height: theme.spacing.sm,
-  },
+  separator: { height: theme.spacing.sm },
   row: {
     flexDirection: 'row',
     backgroundColor: theme.colors.surface,
@@ -153,10 +161,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...theme.shadow.card,
   },
-  rowImage: {
-    width: 90,
-    height: 90,
-  },
+  rowImage: { width: 90, height: 90 },
   rowImagePlaceholder: {
     width: 90,
     height: 90,
@@ -164,9 +169,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rowImagePlaceholderText: {
-    fontSize: 28,
-  },
+  rowImagePlaceholderText: { fontSize: 28 },
   rowBody: {
     flex: 1,
     padding: theme.spacing.sm,
@@ -199,36 +202,26 @@ const styles = StyleSheet.create({
   deleteButton: {
     padding: theme.spacing.md,
   },
-  deleteIcon: {
-    fontSize: 18,
-  },
   badge: {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: theme.radius.full,
     backgroundColor: '#DCFCE7',
   },
-  badgeTaken: {
-    backgroundColor: '#F3F4F6',
-  },
+  badgeTaken: { backgroundColor: '#F3F4F6' },
   badgeText: {
     fontSize: 10,
     fontWeight: '600',
     color: '#16A34A',
   },
-  badgeTextTaken: {
-    color: theme.colors.textMuted,
-  },
+  badgeTextTaken: { color: theme.colors.textMuted },
   emptyState: {
     alignItems: 'center',
     padding: theme.spacing.xl,
     gap: theme.spacing.sm,
     marginTop: theme.spacing.xxl,
   },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: theme.spacing.sm,
-  },
+  emptyIcon: { fontSize: 48, marginBottom: theme.spacing.sm },
   emptyTitle: {
     ...theme.typography.subheading,
     color: theme.colors.text,

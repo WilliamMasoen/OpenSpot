@@ -1,20 +1,53 @@
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
-import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
-import { Button } from '@/components/ui/Button';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import { router } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/hooks/useAuth';
 import { theme } from '@/constants/theme';
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
+
+function NavRow({
+  icon,
+  label,
+  onPress,
+  destructive,
+}: {
+  icon: IoniconName;
+  label: string;
+  onPress: () => void;
+  destructive?: boolean;
+}) {
   return (
-    <View style={styles.infoRow}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value}</Text>
-    </View>
+    <TouchableOpacity style={styles.navRow} onPress={onPress} activeOpacity={0.7}>
+      <View style={[styles.navIcon, destructive && styles.navIconDestructive]}>
+        <Ionicons
+          name={icon}
+          size={20}
+          color={destructive ? theme.colors.error : theme.colors.primary}
+        />
+      </View>
+      <Text style={[styles.navLabel, destructive && styles.navLabelDestructive]}>
+        {label}
+      </Text>
+      {!destructive && (
+        <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
+      )}
+    </TouchableOpacity>
   );
 }
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
+
+  if (!user) return null;
+
+  const initials = [user.firstName, user.lastName]
+    .filter(Boolean)
+    .map((n) => n[0].toUpperCase())
+    .join('') || user.email[0].toUpperCase();
+
+  const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ') || 'User';
 
   const handleLogout = () => {
     Alert.alert('Sign out', 'Are you sure you want to sign out?', [
@@ -23,124 +56,130 @@ export default function ProfileScreen() {
     ]);
   };
 
-  if (!user) return null;
-
-  const isAdmin = user.roles.includes('Admin');
-
   return (
-    <ScreenWrapper scrollable padded={false}>
-      <View style={styles.container}>
-        <View style={styles.avatarSection}>
+    <SafeAreaView style={styles.safe}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Avatar + identity */}
+        <View style={styles.hero}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{user.email.charAt(0).toUpperCase()}</Text>
+            <Text style={styles.avatarText}>{initials}</Text>
           </View>
-          <Text style={styles.emailDisplay}>{user.email}</Text>
-          {isAdmin && (
-            <View style={styles.adminBadge}>
-              <Text style={styles.adminBadgeText}>Admin</Text>
-            </View>
-          )}
+          <Text style={styles.name}>{fullName}</Text>
+          <Text style={styles.email}>{user.email}</Text>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Account</Text>
-          <View style={styles.card}>
-            <InfoRow label="Email" value={user.email} />
-            <View style={styles.divider} />
-            <InfoRow label="User ID" value={user.userId.slice(0, 8) + '…'} />
-            <View style={styles.divider} />
-            <InfoRow label="Role" value={user.roles.join(', ')} />
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Button
-            label="Sign Out"
-            onPress={handleLogout}
-            variant="secondary"
+        {/* Navigation rows */}
+        <View style={styles.card}>
+          <NavRow
+            icon="person-outline"
+            label="Edit Profile"
+            onPress={() => router.push('/edit-profile')}
+          />
+          <View style={styles.divider} />
+          <NavRow
+            icon="car-outline"
+            label="My Spots"
+            onPress={() => router.push('/my-listings')}
+          />
+          <View style={styles.divider} />
+          <NavRow
+            icon="heart-outline"
+            label="My Favourites"
+            onPress={() => router.push('/favorites')}
           />
         </View>
-      </View>
-    </ScreenWrapper>
+
+        {/* Sign out */}
+        <View style={styles.card}>
+          <NavRow
+            icon="log-out-outline"
+            label="Sign Out"
+            onPress={handleLogout}
+            destructive
+          />
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safe: {
     flex: 1,
-    padding: theme.spacing.lg,
-    gap: theme.spacing.xl,
+    backgroundColor: theme.colors.background,
   },
-  avatarSection: {
+  scroll: {
+    padding: theme.spacing.lg,
+    gap: theme.spacing.lg,
+  },
+  hero: {
     alignItems: 'center',
+    paddingVertical: theme.spacing.lg,
     gap: theme.spacing.sm,
-    paddingTop: theme.spacing.md,
   },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     backgroundColor: theme.colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: theme.spacing.xs,
   },
   avatarText: {
-    fontSize: 32,
+    fontSize: 34,
     fontWeight: '700',
     color: theme.colors.primary,
   },
-  emailDisplay: {
-    fontSize: 16,
-    fontWeight: '600',
+  name: {
+    fontSize: 22,
+    fontWeight: '700',
     color: theme.colors.text,
+    letterSpacing: -0.3,
   },
-  adminBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    backgroundColor: '#FEF3C7',
-    borderRadius: theme.radius.full,
-  },
-  adminBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#D97706',
-  },
-  section: {
-    gap: theme.spacing.sm,
-  },
-  sectionTitle: {
-    ...theme.typography.label,
+  email: {
+    fontSize: 14,
     color: theme.colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
   },
   card: {
     backgroundColor: theme.colors.surface,
     borderRadius: theme.radius.lg,
     ...theme.shadow.card,
+    overflow: 'hidden',
   },
-  infoRow: {
+  navRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: theme.spacing.md,
     paddingHorizontal: theme.spacing.md,
-    paddingVertical: 14,
+    paddingVertical: 15,
   },
-  infoLabel: {
-    fontSize: 14,
-    color: theme.colors.textMuted,
+  navIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: theme.radius.sm,
+    backgroundColor: theme.colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navIconDestructive: {
+    backgroundColor: theme.colors.errorLight,
+  },
+  navLabel: {
+    flex: 1,
+    fontSize: 15,
     fontWeight: '500',
-  },
-  infoValue: {
-    fontSize: 14,
     color: theme.colors.text,
-    fontWeight: '500',
-    maxWidth: '60%',
-    textAlign: 'right',
+  },
+  navLabelDestructive: {
+    color: theme.colors.error,
   },
   divider: {
     height: 1,
     backgroundColor: theme.colors.border,
-    marginHorizontal: theme.spacing.md,
+    marginLeft: 66,
   },
 });

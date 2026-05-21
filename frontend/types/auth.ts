@@ -17,11 +17,15 @@ export interface TokenResponse {
   expiresAt: string;
   userId: string;
   email: string;
+  firstName: string;
+  lastName: string;
   roles: string[];
 }
 
 export interface AuthUser {
   userId: string;
   email: string;
+  firstName: string;
+  lastName: string;
   roles: string[];
 }
