@@ -45,7 +45,7 @@ export default function HomeScreen() {
 
   if (loading && listings.length === 0) {
     return (
-      <ScreenWrapper>
+      <ScreenWrapper edges={['top']}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator color={theme.colors.primary} size="large" />
         </View>
@@ -55,14 +55,14 @@ export default function HomeScreen() {
 
   if (error && listings.length === 0) {
     return (
-      <ScreenWrapper>
+      <ScreenWrapper edges={['top']}>
         <ErrorState message={error} onRetry={refetch} />
       </ScreenWrapper>
     );
   }
 
   return (
-    <ScreenWrapper>
+    <ScreenWrapper edges={['top']}>
       <FlatList<Listing>
         data={listings}
         keyExtractor={(item) => item.id}
@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
   },
   list: {
     padding: theme.spacing.md,
-    paddingBottom: theme.spacing.xl,
+    paddingBottom: theme.spacing.xxl,
   },
   row: {
     gap: theme.spacing.sm,

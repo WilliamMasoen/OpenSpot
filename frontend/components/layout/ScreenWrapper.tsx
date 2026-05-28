@@ -1,6 +1,6 @@
 import { ReactNode } from 'react';
 import { StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, Edge } from 'react-native-safe-area-context';
 import { theme } from '@/constants/theme';
 
 interface ScreenWrapperProps {
@@ -8,6 +8,7 @@ interface ScreenWrapperProps {
   scrollable?: boolean;
   withKeyboard?: boolean;
   padded?: boolean;
+  edges?: Edge[];
 }
 
 export function ScreenWrapper({
@@ -15,6 +16,7 @@ export function ScreenWrapper({
   scrollable = false,
   withKeyboard = false,
   padded = true,
+  edges,
 }: ScreenWrapperProps) {
   const content = scrollable ? (
     <ScrollView
@@ -37,7 +39,7 @@ export function ScreenWrapper({
   ) : content;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={edges}>
       {wrapped}
     </SafeAreaView>
   );

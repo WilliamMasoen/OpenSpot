@@ -165,6 +165,21 @@ namespace OpenSpot.Listings.Controllers
         }
 
         [Authorize]
+        [HttpPatch("{id:guid}/availability")]
+        public async Task<IActionResult> SetAvailability(Guid id, [FromBody] UpdateAvailabilityDto dto, CancellationToken token)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var result = await _listingService.SetAvailabilityAsync(id, userId, dto.IsAvailable, token);
+            return result.Status switch
+            {
+                ResultStatus.Ok => Ok(result.Data),
+                ResultStatus.NotFound => NotFound(result.Message),
+                ResultStatus.Forbidden => StatusCode(403, result.Message),
+                _ => StatusCode(500, "Unexpected error.")
+            };
+        }
+
+        [Authorize]
         [HttpPost("{id:guid}/images")]
         public async Task<IActionResult> UploadImage(Guid id, IFormFile file, CancellationToken token)
         {

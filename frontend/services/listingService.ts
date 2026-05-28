@@ -31,6 +31,9 @@ export const listingService = {
   toggleFavorite: (id: string) =>
     apiClient.post<{ isFavorited: boolean }>(`/api/listings/${id}/favorite`),
 
+  setAvailability: (id: string, isAvailable: boolean) =>
+    apiClient.patch<Listing>(`/api/listings/${id}/availability`, { isAvailable }),
+
   getFavorites: () =>
     apiClient.get<Listing[]>('/api/listings/favorites'),
 

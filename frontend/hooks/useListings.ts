@@ -78,7 +78,48 @@ export function useMyListings() {
     }
   };
 
-  return { listings, loading, error, refetch: fetchMyListings, deleteListing };
+  const toggleAvailability = useCallback(async (id: string, currentIsAvailable: boolean): Promise<void> => {
+    setListings((prev) => prev.map((l) => l.id === id ? { ...l, isAvailable: !currentIsAvailable } : l));
+    try {
+      await listingService.setAvailability(id, !currentIsAvailable);
+    } catch {
+      setListings((prev) => prev.map((l) => l.id === id ? { ...l, isAvailable: currentIsAvailable } : l));
+    }
+  }, []);
+
+  return { listings, loading, error, refetch: fetchMyListings, deleteListing, toggleAvailability };
+}
+
+export function useEditListing() {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const editListing = async (
+    id: string,
+    dto: UpdateListingRequest,
+    newImageUris: string[] = []
+  ): Promise<Listing | null> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const listing = await listingService.update(id, dto);
+      for (const uri of newImageUris) {
+        try {
+          await listingService.uploadImage(listing.id, uri);
+        } catch {
+          // Non-fatal: listing updated, image upload failed
+        }
+      }
+      return listing;
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to update listing.');
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { editListing, loading, error, clearError: () => setError(null) };
 }
 
 export function useCreateListing() {

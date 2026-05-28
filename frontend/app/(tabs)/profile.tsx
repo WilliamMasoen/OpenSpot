@@ -57,7 +57,7 @@ export default function ProfileScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
@@ -114,6 +114,7 @@ const styles = StyleSheet.create({
   scroll: {
     padding: theme.spacing.lg,
     gap: theme.spacing.lg,
+    paddingBottom: theme.spacing.xxl,
   },
   hero: {
     alignItems: 'center',

@@ -85,7 +85,7 @@ export default function ChatScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <FlatList<Conversation>
         data={conversations}
         keyExtractor={(item) => item.id}
@@ -124,7 +124,7 @@ export default function ChatScreen() {
         }
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={conversations.length === 0 ? styles.emptyContainer : undefined}
+        contentContainerStyle={conversations.length === 0 ? styles.emptyContainer : styles.listContent}
       />
       {error ? (
         <View style={styles.errorBanner}>
@@ -151,6 +151,9 @@ const styles = StyleSheet.create({
   },
   emptyContainer: {
     flex: 1,
+  },
+  listContent: {
+    paddingBottom: theme.spacing.xxl,
   },
   centered: {
     flex: 1,

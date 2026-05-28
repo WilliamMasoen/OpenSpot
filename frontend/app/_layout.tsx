@@ -9,8 +9,10 @@ import * as SecureStore from 'expo-secure-store';
 import { View, ActivityIndicator } from 'react-native';
 import { theme } from '@/constants/theme';
 
+const ONBOARDING_KEY = 'hasSeenOnboarding';
+
 function AuthGuard() {
-  const { isAuthenticated, isLoading } = useAuthStore();
+  const { isAuthenticated, isLoading, hasSeenOnboarding } = useAuthStore();
   const router = useRouter();
   const segments = useSegments();
 
@@ -18,24 +20,34 @@ function AuthGuard() {
     if (isLoading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    const inOnboarding = segments[0] === 'onboarding';
+
+    if (!hasSeenOnboarding) {
+      if (!inOnboarding) router.replace('/onboarding');
+      return;
+    }
 
     if (isAuthenticated && inAuthGroup) {
       router.replace('/(tabs)');
-    } else if (!isAuthenticated && !inAuthGroup) {
+    } else if (!isAuthenticated && !inAuthGroup && !inOnboarding) {
       router.replace('/(auth)/login');
     }
-  }, [isAuthenticated, isLoading, segments]);
+  }, [isAuthenticated, isLoading, hasSeenOnboarding, segments]);
 
   return null;
 }
 
 export default function RootLayout() {
-  const { setAuth, clearAuth, setLoading, isAuthenticated } = useAuthStore();
+  const { setAuth, clearAuth, setLoading, setHasSeenOnboarding, isAuthenticated } = useAuthStore();
 
   useEffect(() => {
     async function hydrate() {
       try {
-        const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+        const [onboarded, refreshToken] = await Promise.all([
+          SecureStore.getItemAsync(ONBOARDING_KEY),
+          SecureStore.getItemAsync(REFRESH_TOKEN_KEY),
+        ]);
+        setHasSeenOnboarding(onboarded === 'true');
         if (refreshToken) {
           const tokenResponse = await authService.refresh(refreshToken);
           await setAuth(tokenResponse);
@@ -79,9 +91,11 @@ export default function RootLayout() {
     <>
       <AuthGuard />
       <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="onboarding" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="create" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="edit-listing/[id]" options={{ presentation: 'modal' }} />
       </Stack>
     </>
   );

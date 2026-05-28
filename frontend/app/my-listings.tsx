@@ -12,7 +12,7 @@ function formatDate(dateStr: string): string {
   return `${months[parseInt(month) - 1]} ${parseInt(day)}, ${year}`;
 }
 
-function MyListingRow({ listing, onDelete }: { listing: Listing; onDelete: () => void }) {
+function MyListingRow({ listing, onDelete, onToggleAvailability }: { listing: Listing; onDelete: () => void; onToggleAvailability: () => void; }) {
   const hasImage = listing.imageUrls?.length > 0;
 
   const confirmDelete = () => {
@@ -42,23 +42,33 @@ function MyListingRow({ listing, onDelete }: { listing: Listing; onDelete: () =>
         <Text style={styles.rowDates}>{formatDate(listing.startDate)} – {formatDate(listing.endDate)}</Text>
         <View style={styles.rowFooter}>
           <Text style={styles.rowPrice}>${listing.price}/mo</Text>
-          <View style={[styles.badge, !listing.isAvailable && styles.badgeTaken]}>
-            <Text style={[styles.badgeText, !listing.isAvailable && styles.badgeTextTaken]}>
-              {listing.isAvailable ? 'Available' : 'Taken'}
+          <TouchableOpacity
+            style={[styles.badge, !listing.isAvailable && styles.badgeRented]}
+            onPress={(e) => { e.stopPropagation?.(); onToggleAvailability(); }}
+            hitSlop={8}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.badgeText, !listing.isAvailable && styles.badgeTextRented]}>
+              {listing.isAvailable ? 'Available' : 'Rented'}
             </Text>
-          </View>
+          </TouchableOpacity>
         </View>
       </View>
 
-      <TouchableOpacity style={styles.deleteButton} onPress={confirmDelete} hitSlop={8}>
-        <Ionicons name="trash-outline" size={18} color={theme.colors.error} />
-      </TouchableOpacity>
+      <View style={styles.rowActions}>
+        <TouchableOpacity onPress={() => router.push(`/edit-listing/${listing.id}` as `${string}`)} hitSlop={8}>
+          <Ionicons name="pencil-outline" size={18} color={theme.colors.textMuted} />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={confirmDelete} hitSlop={8}>
+          <Ionicons name="trash-outline" size={18} color={theme.colors.error} />
+        </TouchableOpacity>
+      </View>
     </TouchableOpacity>
   );
 }
 
 export default function MyListingsScreen() {
-  const { listings, loading, error, refetch, deleteListing } = useMyListings();
+  const { listings, loading, error, refetch, deleteListing, toggleAvailability } = useMyListings();
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -79,7 +89,11 @@ export default function MyListingsScreen() {
           data={listings}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <MyListingRow listing={item} onDelete={() => deleteListing(item.id)} />
+            <MyListingRow
+              listing={item}
+              onDelete={() => deleteListing(item.id)}
+              onToggleAvailability={() => toggleAvailability(item.id, item.isAvailable)}
+            />
           )}
           contentContainerStyle={styles.list}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
@@ -199,8 +213,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: theme.colors.primary,
   },
-  deleteButton: {
+  rowActions: {
+    flexDirection: 'column',
+    gap: theme.spacing.sm,
     padding: theme.spacing.md,
+    justifyContent: 'center',
   },
   badge: {
     paddingHorizontal: 8,
@@ -208,13 +225,13 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.full,
     backgroundColor: '#DCFCE7',
   },
-  badgeTaken: { backgroundColor: '#F3F4F6' },
+  badgeRented: { backgroundColor: '#FEF3C7' },
   badgeText: {
     fontSize: 10,
     fontWeight: '600',
     color: '#16A34A',
   },
-  badgeTextTaken: { color: theme.colors.textMuted },
+  badgeTextRented: { color: '#D97706' },
   emptyState: {
     alignItems: 'center',
     padding: theme.spacing.xl,

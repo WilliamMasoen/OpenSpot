@@ -9,10 +9,12 @@ interface AuthState {
   accessToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  hasSeenOnboarding: boolean;
   setAuth: (tokenResponse: TokenResponse) => Promise<void>;
   clearAuth: () => Promise<void>;
   setLoading: (loading: boolean) => void;
   updateUser: (updates: Pick<AuthUser, 'firstName' | 'lastName'>) => void;
+  setHasSeenOnboarding: (seen: boolean) => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -20,6 +22,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   accessToken: null,
   isAuthenticated: false,
   isLoading: true,
+  hasSeenOnboarding: false,
 
   setAuth: async (tokenResponse) => {
     await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, tokenResponse.refreshToken);
@@ -46,6 +49,8 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   setLoading: (loading) => set({ isLoading: loading }),
+
+  setHasSeenOnboarding: (seen) => set({ hasSeenOnboarding: seen }),
 
   updateUser: (updates) =>
     set((state) => ({

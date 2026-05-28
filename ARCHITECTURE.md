@@ -393,7 +393,8 @@ The unread count displayed on the Chat tab badge is managed by `chatStore` (Zust
 
 ```
 app/
-├── _layout.tsx               Root layout: auth guard + SignalR + hydration
+├── _layout.tsx               Root layout: auth guard + SignalR + hydration + onboarding check
+├── onboarding.tsx            First-time tutorial (4 slides, skippable)
 ├── index.tsx                 Redirect (handled by _layout)
 ├── (auth)/
 │   ├── _layout.tsx           Stack for auth screens
@@ -422,12 +423,13 @@ app/
 `AuthGuard` is a component rendered inside the root layout that reads auth state and uses `router.replace()` to redirect:
 
 ```
-isLoading = true  →  show spinner (prevents flash of wrong screen)
-isLoading = false, isAuthenticated, in (auth) group  →  redirect to /(tabs)
-isLoading = false, not isAuthenticated, not in (auth) group  →  redirect to /(auth)/login
+isLoading = true                              →  show spinner
+!hasSeenOnboarding, not on /onboarding       →  redirect to /onboarding
+hasSeenOnboarding, authenticated, in (auth)  →  redirect to /(tabs)
+hasSeenOnboarding, not authenticated, not in (auth) or onboarding  →  redirect to /(auth)/login
 ```
 
-Hydration (`SecureStore.getItemAsync` → `authService.refresh`) happens in `RootLayout`'s `useEffect`. This runs once on mount. The `isLoading = true` default prevents the guard from redirecting before hydration completes.
+Hydration reads `hasSeenOnboarding` and the refresh token from `expo-secure-store` in parallel, then attempts a silent token refresh if a refresh token exists. `isLoading = true` by default prevents any redirect until hydration completes.
 
 ### State Management
 

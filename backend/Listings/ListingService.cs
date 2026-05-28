@@ -21,7 +21,7 @@ namespace OpenSpot.Listings.Services
 
         public async Task<ServiceResult<PagedResult<GetListingDto>?>> GetListingsAsync(string? requesterId, int page, int pageSize, CancellationToken token)
         {
-            var query = _context.Listing.OrderByDescending(l => l.CreatedAt);
+            var query = _context.Listing.Where(l => l.IsAvailable).OrderByDescending(l => l.CreatedAt);
             var totalCount = await query.CountAsync(token);
 
             var listings = await query
@@ -161,7 +161,7 @@ namespace OpenSpot.Listings.Services
         public async Task<ServiceResult<List<GetListingDto>?>> SearchListingsAsync(
             string? q, double? lat, double? lng, double radiusKm, string? requesterId, CancellationToken token)
         {
-            var query = _context.Listing.Include(l => l.Images).AsQueryable();
+            var query = _context.Listing.Include(l => l.Images).Where(l => l.IsAvailable).AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(q))
             {
@@ -223,6 +223,19 @@ namespace OpenSpot.Listings.Services
 
             return ServiceResult<List<GetListingDto>?>.Ok(
                 listings.Select(l => new GetListingDto(l, true)).ToList());
+        }
+
+        public async Task<ServiceResult<GetListingDto?>> SetAvailabilityAsync(Guid id, string requesterId, bool isAvailable, CancellationToken token)
+        {
+            var listing = await _context.Listing.FindAsync([id], token);
+            if (listing is null)
+                return ServiceResult<GetListingDto?>.Fail("Listing not found.", ResultStatus.NotFound);
+            if (listing.OwnerId != requesterId)
+                return ServiceResult<GetListingDto?>.Fail("You do not own this listing.", ResultStatus.Forbidden);
+
+            listing.IsAvailable = isAvailable;
+            await _context.SaveChangesAsync(token);
+            return ServiceResult<GetListingDto?>.Ok(new GetListingDto(listing));
         }
 
         private async Task<HashSet<Guid>?> GetFavoriteIdsAsync(string? userId, CancellationToken token)

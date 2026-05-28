@@ -1,17 +1,33 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Image, ActivityIndicator,
   TouchableOpacity, Dimensions,
 } from 'react-native';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as SecureStore from 'expo-secure-store';
 import { listingService } from '@/services/listingService';
 import { chatService } from '@/services/chatService';
 import { useAuthStore } from '@/store/authStore';
 import { Listing } from '@/types/listing';
 import { theme } from '@/constants/theme';
 import { markListingsStale } from '@/utils/refreshFlags';
+
+const SAFETY_TOAST_KEY = 'safetyToastDate';
+
+function SafetyToast({ onDismiss }: { onDismiss: () => void }) {
+  return (
+    <View style={styles.toast}>
+      <Text style={styles.toastText}>
+        Safety first — always meet in a public place and verify the spot before transferring any payment.
+      </Text>
+      <TouchableOpacity onPress={onDismiss} hitSlop={8} style={styles.toastClose}>
+        <Ionicons name="close" size={16} color="#92400E" />
+      </TouchableOpacity>
+    </View>
+  );
+}
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -37,21 +53,40 @@ export default function ListingDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const [messageLoading, setMessageLoading] = useState(false);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [showToast, setShowToast] = useState(false);
   const user = useAuthStore((s) => s.user);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const data = await listingService.getById(id);
-        setListing(data);
-      } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : 'Failed to load listing.');
-      } finally {
-        setLoading(false);
+  const hasLoaded = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      async function load() {
+        if (!hasLoaded.current) setLoading(true);
+        try {
+          const data = await listingService.getById(id);
+          setListing(data);
+          hasLoaded.current = true;
+        } catch (e: unknown) {
+          if (!hasLoaded.current) setError(e instanceof Error ? e.message : 'Failed to load listing.');
+        } finally {
+          setLoading(false);
+        }
       }
-    }
-    load();
-  }, [id]);
+      load();
+    }, [id])
+  );
+
+  useEffect(() => {
+    SecureStore.getItemAsync(SAFETY_TOAST_KEY).then((stored) => {
+      const today = new Date().toISOString().split('T')[0];
+      setShowToast(stored !== today);
+    });
+  }, []);
+
+  const handleDismissToast = async () => {
+    setShowToast(false);
+    await SecureStore.setItemAsync(SAFETY_TOAST_KEY, new Date().toISOString().split('T')[0]);
+  };
 
   if (loading) {
     return (
@@ -90,6 +125,21 @@ export default function ListingDetailScreen() {
     }
   };
 
+  const handleAvailabilityToggle = async () => {
+    if (availabilityLoading) return;
+    setAvailabilityLoading(true);
+    const prev = listing.isAvailable;
+    setListing((l) => l ? { ...l, isAvailable: !l.isAvailable } : l);
+    try {
+      await listingService.setAvailability(listing.id, !prev);
+      markListingsStale();
+    } catch {
+      setListing((l) => l ? { ...l, isAvailable: prev } : l);
+    } finally {
+      setAvailabilityLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -121,9 +171,9 @@ export default function ListingDetailScreen() {
           <View style={styles.titleRow}>
             <Text style={styles.title}>{listing.title}</Text>
             <View style={styles.titleActions}>
-              <View style={[styles.badge, !listing.isAvailable && styles.badgeTaken]}>
-                <Text style={[styles.badgeText, !listing.isAvailable && styles.badgeTextTaken]}>
-                  {listing.isAvailable ? 'Available' : 'Taken'}
+              <View style={[styles.badge, !listing.isAvailable && styles.badgeRented]}>
+                <Text style={[styles.badgeText, !listing.isAvailable && styles.badgeTextRented]}>
+                  {listing.isAvailable ? 'Available' : 'Rented'}
                 </Text>
               </View>
               {!isOwner && (
@@ -201,9 +251,40 @@ export default function ListingDetailScreen() {
             </TouchableOpacity>
           )}
 
+          {!isOwner && listing.isAvailable && showToast && (
+            <SafetyToast onDismiss={handleDismissToast} />
+          )}
+
           {isOwner && (
-            <View style={styles.ownerNote}>
-              <Text style={styles.ownerNoteText}>This is your listing. Manage it in My Spots.</Text>
+            <View style={styles.ownerActions}>
+              <View style={styles.ownerActionsRow}>
+                <TouchableOpacity
+                  style={styles.editButton}
+                  onPress={() => router.push(`/edit-listing/${listing.id}` as `${string}`)}
+                >
+                  <Ionicons name="pencil-outline" size={16} color={theme.colors.primary} />
+                  <Text style={styles.editButtonText}>Edit Listing</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.mySpotsButton}
+                  onPress={() => router.push('/my-listings')}
+                >
+                  <Text style={styles.mySpotsButtonText}>My Spots</Text>
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity
+                style={[styles.availabilityButton, listing.isAvailable ? styles.availabilityButtonRent : styles.availabilityButtonAvail]}
+                onPress={handleAvailabilityToggle}
+                disabled={availabilityLoading}
+              >
+                {availabilityLoading ? (
+                  <ActivityIndicator size="small" color={listing.isAvailable ? '#D97706' : '#16A34A'} />
+                ) : (
+                  <Text style={[styles.availabilityButtonText, listing.isAvailable ? styles.availabilityTextRent : styles.availabilityTextAvail]}>
+                    {listing.isAvailable ? 'Mark as Rented' : 'Mark as Available'}
+                  </Text>
+                )}
+              </TouchableOpacity>
             </View>
           )}
         </View>
@@ -369,27 +450,94 @@ const styles = StyleSheet.create({
     backgroundColor: '#DCFCE7',
     marginTop: 6,
   },
-  badgeTaken: {
-    backgroundColor: '#F3F4F6',
+  badgeRented: {
+    backgroundColor: '#FEF3C7',
   },
   badgeText: {
     fontSize: 11,
     fontWeight: '600',
     color: '#16A34A',
   },
-  badgeTextTaken: {
-    color: theme.colors.textMuted,
+  badgeTextRented: {
+    color: '#D97706',
   },
-  ownerNote: {
-    marginTop: theme.spacing.lg,
-    padding: theme.spacing.md,
-    backgroundColor: theme.colors.primaryLight,
+  toast: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: theme.spacing.sm,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
     borderRadius: theme.radius.md,
+    padding: theme.spacing.md,
+    marginTop: theme.spacing.md,
   },
-  ownerNoteText: {
+  toastText: {
+    flex: 1,
     fontSize: 13,
+    color: '#92400E',
+    lineHeight: 19,
+  },
+  toastClose: {
+    marginTop: 1,
+  },
+  ownerActions: {
+    marginTop: theme.spacing.lg,
+    gap: theme.spacing.sm,
+  },
+  ownerActionsRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+  },
+  editButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    height: 48,
+    borderRadius: theme.radius.md,
+    borderWidth: 1.5,
+    borderColor: theme.colors.primary,
+  },
+  editButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
     color: theme.colors.primary,
-    fontWeight: '500',
-    textAlign: 'center',
+  },
+  mySpotsButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 48,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.primaryLight,
+  },
+  mySpotsButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.primary,
+  },
+  availabilityButton: {
+    height: 48,
+    borderRadius: theme.radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  availabilityButtonRent: {
+    backgroundColor: '#FEF3C7',
+  },
+  availabilityButtonAvail: {
+    backgroundColor: '#DCFCE7',
+  },
+  availabilityButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  availabilityTextRent: {
+    color: '#D97706',
+  },
+  availabilityTextAvail: {
+    color: '#16A34A',
   },
 });

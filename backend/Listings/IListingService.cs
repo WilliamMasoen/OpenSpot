@@ -15,5 +15,6 @@ namespace OpenSpot.Listings.Interfaces
         Task<ServiceResult<List<GetListingDto>?>> SearchListingsAsync(string? q, double? lat, double? lng, double radiusKm, string? requesterId, CancellationToken token);
         Task<ServiceResult<bool?>> ToggleFavoriteAsync(string userId, Guid listingId, CancellationToken token);
         Task<ServiceResult<List<GetListingDto>?>> GetFavoritesAsync(string userId, CancellationToken token);
+        Task<ServiceResult<GetListingDto?>> SetAvailabilityAsync(Guid id, string requesterId, bool isAvailable, CancellationToken token);
     }
 }

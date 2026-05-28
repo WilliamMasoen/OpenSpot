@@ -68,7 +68,7 @@ export default function SearchScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
@@ -257,7 +257,7 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
   },
   list: {
-    paddingBottom: theme.spacing.xl,
+    paddingBottom: theme.spacing.xxl,
     gap: theme.spacing.sm,
   },
   row: {
