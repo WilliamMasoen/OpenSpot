@@ -38,8 +38,8 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
 }
 
 export default function HomeScreen() {
-  const { listings, totalCount, loading, loadingMore, error, refetch, loadMore } = useListings();
-  const { getFavorited, toggle } = useFavoritesMap(listings);
+  const { listings, totalCount, loading, loadingMore, error, refetch, loadMore, updateListing } = useListings();
+  const { getFavorited, toggle } = useFavoritesMap(listings, updateListing);
 
   useFocusEffect(useCallback(() => { if (consumeListingsStale()) refetch(); }, [refetch]));
 

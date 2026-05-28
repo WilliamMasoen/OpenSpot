@@ -20,8 +20,8 @@ export default function SearchScreen() {
   const [nearMe, setNearMe] = useState(false);
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
   const inputRef = useRef<TextInput>(null);
-  const { results, loading, error, hasSearched, search, clear } = useSearch();
-  const { getFavorited, toggle } = useFavoritesMap(results);
+  const { results, loading, error, hasSearched, search, clear, updateListing } = useSearch();
+  const { getFavorited, toggle } = useFavoritesMap(results, updateListing);
 
   const requestLocation = async (): Promise<{ lat: number; lng: number } | null> => {
     const { status } = await Location.requestForegroundPermissionsAsync();

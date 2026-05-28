@@ -37,5 +37,9 @@ export function useSearch() {
     setError(null);
   }, []);
 
-  return { results, loading, error, hasSearched, search, clear };
+  const updateListing = useCallback((id: string, updates: Partial<Listing>) => {
+    setResults((prev) => prev.map((l) => l.id === id ? { ...l, ...updates } : l));
+  }, []);
+
+  return { results, loading, error, hasSearched, search, clear, updateListing };
 }

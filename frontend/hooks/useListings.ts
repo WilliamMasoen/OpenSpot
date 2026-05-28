@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { listingService } from '@/services/listingService';
 import { Listing, CreateListingRequest } from '@/types/listing';
 
@@ -42,7 +42,11 @@ export function useListings() {
     fetchPage(page + 1, false);
   }, [hasMore, loadingMore, loading, page, fetchPage]);
 
-  return { listings, totalCount, loading, loadingMore, hasMore, error, refetch, loadMore };
+  const updateListing = useCallback((id: string, updates: Partial<Listing>) => {
+    setListings((prev) => prev.map((l) => l.id === id ? { ...l, ...updates } : l));
+  }, []);
+
+  return { listings, totalCount, loading, loadingMore, hasMore, error, refetch, loadMore, updateListing };
 }
 
 export function useMyListings() {
@@ -154,30 +158,24 @@ export function useCreateListing() {
   return { createListing, loading, error, clearError: () => setError(null) };
 }
 
-// Manages optimistic favorite state for a list of listings.
-export function useFavoritesMap(listings: Listing[]) {
-  const [pending, setPending] = useState<Record<string, boolean>>({});
-  const pendingRef = useRef(pending);
-  pendingRef.current = pending;
-
+export function useFavoritesMap(
+  listings: Listing[],
+  updateListing: (id: string, updates: Partial<Listing>) => void,
+) {
   const getFavorited = useCallback((id: string): boolean => {
-    if (id in pendingRef.current) return pendingRef.current[id];
     return listings.find((l) => l.id === id)?.isFavorited ?? false;
   }, [listings]);
 
   const toggle = useCallback(async (id: string) => {
-    const current = id in pendingRef.current
-      ? pendingRef.current[id]
-      : (listings.find((l) => l.id === id)?.isFavorited ?? false);
-    const next = !current;
-    setPending((prev) => ({ ...prev, [id]: next }));
+    const current = listings.find((l) => l.id === id)?.isFavorited ?? false;
+    updateListing(id, { isFavorited: !current });
     try {
       const result = await listingService.toggleFavorite(id);
-      setPending((prev) => ({ ...prev, [id]: result.isFavorited }));
+      updateListing(id, { isFavorited: result.isFavorited });
     } catch {
-      setPending((prev) => ({ ...prev, [id]: current }));
+      updateListing(id, { isFavorited: current });
     }
-  }, [listings]);
+  }, [listings, updateListing]);
 
   return { getFavorited, toggle };
 }
