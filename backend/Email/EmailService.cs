@@ -31,6 +31,7 @@ namespace OpenSpot.Email
             message.Body = new TextPart("html") { Text = body };
 
             using var client = new SmtpClient();
+            client.CheckCertificateRevocation = false;
             await client.ConnectAsync(_options.Host, _options.Port, SecureSocketOptions.StartTls);
             await client.AuthenticateAsync(_options.Username, _options.Password);
             await client.SendAsync(message);

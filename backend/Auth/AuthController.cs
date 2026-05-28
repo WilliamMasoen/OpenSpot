@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using OpenSpot.Auth.DTOs;
 using OpenSpot.Common;
 
@@ -18,6 +19,7 @@ namespace OpenSpot.Auth
         }
 
         [HttpPost("register")]
+        [EnableRateLimiting("auth")]
         public async Task<IActionResult> Register([FromBody] RegisterDto dto, CancellationToken token)
         {
             if (!ModelState.IsValid)
@@ -34,6 +36,7 @@ namespace OpenSpot.Auth
         }
 
         [HttpPost("login")]
+        [EnableRateLimiting("auth")]
         public async Task<IActionResult> Login([FromBody] LoginDto dto, CancellationToken token)
         {
             if (!ModelState.IsValid)
@@ -77,7 +80,19 @@ namespace OpenSpot.Auth
             };
         }
 
+        [HttpPost("resend-verification")]
+        [EnableRateLimiting("auth")]
+        public async Task<IActionResult> ResendVerification([FromBody] ForgotPasswordDto dto, CancellationToken token)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            await _authService.ResendVerificationEmailAsync(dto.Email, token);
+            return NoContent();
+        }
+
         [HttpPost("forgot-password")]
+        [EnableRateLimiting("auth")]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto, CancellationToken token)
         {
             if (!ModelState.IsValid)

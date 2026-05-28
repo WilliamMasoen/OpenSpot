@@ -1,7 +1,9 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using DotNetEnv;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using OpenSpot.Auth;
@@ -111,6 +113,21 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // --------------------
+// Rate limiting
+// --------------------
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddFixedWindowLimiter("auth", o =>
+    {
+        o.PermitLimit = 10;
+        o.Window = TimeSpan.FromMinutes(1);
+        o.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        o.QueueLimit = 0;
+    });
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+});
+
+// --------------------
 // App
 // --------------------
 var app = builder.Build();
@@ -128,6 +145,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseStaticFiles();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
@@ -152,6 +170,8 @@ static async Task SeedAsync(WebApplication app)
 
     var adminEmail = app.Configuration["Admin:Email"] ?? throw new Exception("Admin email not configured.");
     var adminPassword = app.Configuration["Admin:Password"] ?? throw new Exception("Admin password not configured.");
+    var adminFirstName = app.Configuration["Admin:FirstName"] ?? string.Empty;
+    var adminLastName = app.Configuration["Admin:LastName"] ?? string.Empty;
 
     if (await userManager.FindByEmailAsync(adminEmail) == null)
     {
@@ -159,8 +179,8 @@ static async Task SeedAsync(WebApplication app)
         {
             UserName = adminEmail,
             Email = adminEmail,
-            FirstName = "William",
-            LastName = string.Empty,
+            FirstName = adminFirstName,
+            LastName = adminLastName,
             EmailConfirmed = true
         };
 

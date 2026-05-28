@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { router } from 'expo-router';
-import { useAuthStore } from '@/store/authStore';
+import * as SecureStore from 'expo-secure-store';
+import { useAuthStore, REFRESH_TOKEN_KEY } from '@/store/authStore';
 import { authService } from '@/services/authService';
 import { LoginRequest, RegisterRequest } from '@/types/auth';
 
 export function useAuth() {
-  const { user, isAuthenticated, setAuth, clearAuth, refreshToken } = useAuthStore();
+  const { user, isAuthenticated, setAuth, clearAuth } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,8 +40,9 @@ export function useAuth() {
 
   const logout = async () => {
     try {
-      if (refreshToken) {
-        await authService.logout(refreshToken);
+      const storedToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+      if (storedToken) {
+        await authService.logout(storedToken);
       }
     } catch {
       // Clear local state even if server call fails
@@ -64,6 +66,20 @@ export function useAuth() {
     }
   };
 
+  const resendVerification = async (email: string): Promise<boolean> => {
+    setLoading(true);
+    setError(null);
+    try {
+      await authService.resendVerification(email);
+      return true;
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to resend verification email.');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return {
     user,
     isAuthenticated,
@@ -74,5 +90,6 @@ export function useAuth() {
     register,
     logout,
     forgotPassword,
+    resendVerification,
   };
 }

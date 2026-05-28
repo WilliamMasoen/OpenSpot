@@ -16,4 +16,7 @@ export const authService = {
 
   forgotPassword: (email: string) =>
     apiClient.post<void>('/api/auth/forgot-password', { email }),
+
+  resendVerification: (email: string) =>
+    apiClient.post<void>('/api/auth/resend-verification', { email }),
 };

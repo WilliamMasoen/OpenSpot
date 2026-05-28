@@ -19,16 +19,28 @@ namespace OpenSpot.Listings.Services
             _geocoding = geocoding;
         }
 
-        public async Task<ServiceResult<List<GetListingDto>?>> GetListingsAsync(string? requesterId, CancellationToken token)
+        public async Task<ServiceResult<PagedResult<GetListingDto>?>> GetListingsAsync(string? requesterId, int page, int pageSize, CancellationToken token)
         {
-            var listings = await _context.Listing
+            var query = _context.Listing.OrderByDescending(l => l.CreatedAt);
+            var totalCount = await query.CountAsync(token);
+
+            var listings = await query
                 .Include(l => l.Images)
-                .OrderByDescending(l => l.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
                 .ToListAsync(token);
 
             var favoriteIds = await GetFavoriteIdsAsync(requesterId, token);
-            return ServiceResult<List<GetListingDto>?>.Ok(
-                listings.Select(l => new GetListingDto(l, favoriteIds?.Contains(l.Id))).ToList());
+            var result = new PagedResult<GetListingDto>
+            {
+                Items = listings.Select(l => new GetListingDto(l, favoriteIds?.Contains(l.Id))).ToList(),
+                TotalCount = totalCount,
+                Page = page,
+                PageSize = pageSize,
+                HasMore = page * pageSize < totalCount,
+            };
+
+            return ServiceResult<PagedResult<GetListingDto>?>.Ok(result);
         }
 
         public async Task<ServiceResult<GetListingDto?>> GetListingByIdAsync(Guid id, string? requesterId, CancellationToken token)

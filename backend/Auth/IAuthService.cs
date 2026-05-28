@@ -12,5 +12,6 @@ namespace OpenSpot.Auth
         Task<ServiceResult<bool?>> ForgotPasswordAsync(string email, CancellationToken token);
         Task<ServiceResult<bool?>> ResetPasswordAsync(ResetPasswordDto dto, CancellationToken token);
         Task<ServiceResult<bool?>> VerifyEmailAsync(string userId, string token, CancellationToken cancellationToken);
+        Task<ServiceResult<bool?>> ResendVerificationEmailAsync(string email, CancellationToken token);
     }
 }

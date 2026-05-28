@@ -10,6 +10,7 @@ export function useMessages(conversationId: string) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const decrementUnread = useChatStore((s) => s.decrementUnread);
   const userId = useAuthStore((s) => s.user?.userId);
 
@@ -36,17 +37,21 @@ export function useMessages(conversationId: string) {
       if (convId === conversationId) {
         setMessages((prev) => [...prev, msg]);
         chatService.markRead(conversationId).catch(() => {});
+        decrementUnread(1);
       }
     });
-  }, [conversationId]);
+  }, [conversationId, decrementUnread]);
 
   const sendMessage = useCallback(
     async (body: string) => {
       if (sending || !body.trim()) return;
       setSending(true);
+      setSendError(null);
       try {
         const msg = await chatService.sendMessage(conversationId, body.trim());
         setMessages((prev) => [...prev, msg]);
+      } catch (e: unknown) {
+        setSendError(e instanceof Error ? e.message : 'Failed to send message.');
       } finally {
         setSending(false);
       }
@@ -54,5 +59,5 @@ export function useMessages(conversationId: string) {
     [conversationId, sending]
   );
 
-  return { messages, loading, error, sending, sendMessage };
+  return { messages, loading, error, sending, sendError, sendMessage };
 }

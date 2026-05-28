@@ -89,7 +89,7 @@ export default function ConversationScreen() {
     listingId?: string;
     listingImageUrl?: string;
   }>();
-  const { messages, loading, error, sending, sendMessage } = useMessages(id);
+  const { messages, loading, error, sending, sendError, sendMessage } = useMessages(id);
   const userId = useAuthStore((s) => s.user?.userId);
   const [draft, setDraft] = useState('');
   const listRef = useRef<FlatList<ChatMessage>>(null);
@@ -164,6 +164,11 @@ export default function ConversationScreen() {
             showsVerticalScrollIndicator={false}
           />
         )}
+
+        {/* Send error */}
+        {sendError ? (
+          <Text style={styles.sendError}>{sendError}</Text>
+        ) : null}
 
         {/* Input bar */}
         <View style={styles.inputBar}>
@@ -379,5 +384,13 @@ const styles = StyleSheet.create({
   },
   sendBtnDisabled: {
     opacity: 0.4,
+  },
+  sendError: {
+    fontSize: 12,
+    color: theme.colors.error,
+    textAlign: 'center',
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.xs,
+    backgroundColor: theme.colors.surface,
   },
 });

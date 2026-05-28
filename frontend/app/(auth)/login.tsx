@@ -7,16 +7,27 @@ import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/hooks/useAuth';
 import { theme } from '@/constants/theme';
 
+const UNVERIFIED_MSG = 'Please verify your email before logging in.';
+
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const { login, loading, error, clearError } = useAuth();
+  const [resentEmail, setResentEmail] = useState(false);
+  const { login, resendVerification, loading, error, clearError } = useAuth();
 
   const handleLogin = async () => {
     if (!email.trim() || !password) return;
     clearError();
+    setResentEmail(false);
     await login({ email: email.trim().toLowerCase(), password });
   };
+
+  const handleResend = async () => {
+    const ok = await resendVerification(email.trim().toLowerCase());
+    if (ok) setResentEmail(true);
+  };
+
+  const showResend = error === UNVERIFIED_MSG && email.trim().length > 0 && !resentEmail;
 
   return (
     <ScreenWrapper withKeyboard scrollable>
@@ -46,6 +57,14 @@ export default function LoginScreen() {
           />
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
+          {resentEmail ? (
+            <Text style={styles.success}>Verification email sent — check your inbox.</Text>
+          ) : null}
+          {showResend ? (
+            <TouchableOpacity style={styles.linkRow} onPress={handleResend} disabled={loading}>
+              <Text style={styles.link}>Resend verification email</Text>
+            </TouchableOpacity>
+          ) : null}
 
           <Button label="Sign In" onPress={handleLogin} loading={loading} />
 
@@ -100,6 +119,15 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center',
     backgroundColor: theme.colors.errorLight,
+    padding: theme.spacing.sm,
+    borderRadius: theme.radius.sm,
+  },
+  success: {
+    fontSize: 13,
+    color: theme.colors.success,
+    fontWeight: '500',
+    textAlign: 'center',
+    backgroundColor: '#F0FDF4',
     padding: theme.spacing.sm,
     borderRadius: theme.radius.sm,
   },

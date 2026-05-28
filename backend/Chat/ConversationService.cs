@@ -50,8 +50,19 @@ namespace OpenSpot.Chat.Services
                     CreatedAt = DateTime.UtcNow,
                 };
                 _db.Conversations.Add(conv);
-                await _db.SaveChangesAsync(token);
-                created = true;
+                try
+                {
+                    await _db.SaveChangesAsync(token);
+                    created = true;
+                }
+                catch (DbUpdateException)
+                {
+                    // Another concurrent request created it — detach and read the winner.
+                    _db.Entry(conv).State = EntityState.Detached;
+                    conv = await _db.Conversations
+                        .FirstAsync(c => c.ListingId == listingId && c.BuyerId == buyerId, token);
+                    created = false;
+                }
             }
 
             var dto = await BuildConversationDtoAsync(conv.Id, buyerId, token);

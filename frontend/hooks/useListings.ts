@@ -2,29 +2,47 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { listingService } from '@/services/listingService';
 import { Listing, CreateListingRequest } from '@/types/listing';
 
+const PAGE_SIZE = 20;
+
 export function useListings() {
   const [listings, setListings] = useState<Listing[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchListings = useCallback(async () => {
-    setLoading(true);
+  const fetchPage = useCallback(async (pageNum: number, replace: boolean) => {
+    if (pageNum === 1) setLoading(true);
+    else setLoadingMore(true);
     setError(null);
     try {
-      const data = await listingService.getAll();
-      setListings(data);
+      const data = await listingService.getPage(pageNum, PAGE_SIZE);
+      setTotalCount(data.totalCount);
+      setHasMore(data.hasMore);
+      setPage(pageNum);
+      setListings((prev) => (replace ? data.items : [...prev, ...data.items]));
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load listings.');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchListings();
-  }, [fetchListings]);
+    fetchPage(1, true);
+  }, [fetchPage]);
 
-  return { listings, loading, error, refetch: fetchListings };
+  const refetch = useCallback(() => fetchPage(1, true), [fetchPage]);
+
+  const loadMore = useCallback(() => {
+    if (!hasMore || loadingMore || loading) return;
+    fetchPage(page + 1, false);
+  }, [hasMore, loadingMore, loading, page, fetchPage]);
+
+  return { listings, totalCount, loading, loadingMore, hasMore, error, refetch, loadMore };
 }
 
 export function useMyListings() {

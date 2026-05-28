@@ -1,6 +1,6 @@
 import { apiClient } from './apiClient';
 import { useAuthStore } from '@/store/authStore';
-import { Listing, CreateListingRequest, UpdateListingRequest } from '@/types/listing';
+import { Listing, PagedResult, CreateListingRequest, UpdateListingRequest } from '@/types/listing';
 import Constants from 'expo-constants';
 
 function getBaseUrl(): string {
@@ -10,8 +10,8 @@ function getBaseUrl(): string {
 }
 
 export const listingService = {
-  getAll: () =>
-    apiClient.get<Listing[]>('/api/listings'),
+  getPage: (page: number, pageSize = 20) =>
+    apiClient.get<PagedResult<Listing>>(`/api/listings?page=${page}&pageSize=${pageSize}`),
 
   getById: (id: string) =>
     apiClient.get<Listing>(`/api/listings/${id}`),

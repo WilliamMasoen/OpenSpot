@@ -7,7 +7,6 @@ export const REFRESH_TOKEN_KEY = 'openspot_refresh_token';
 interface AuthState {
   user: AuthUser | null;
   accessToken: string | null;
-  refreshToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   setAuth: (tokenResponse: TokenResponse) => Promise<void>;
@@ -19,7 +18,6 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   accessToken: null,
-  refreshToken: null,
   isAuthenticated: false,
   isLoading: true,
 
@@ -27,7 +25,6 @@ export const useAuthStore = create<AuthState>((set) => ({
     await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, tokenResponse.refreshToken);
     set({
       accessToken: tokenResponse.accessToken,
-      refreshToken: tokenResponse.refreshToken,
       user: {
         userId: tokenResponse.userId,
         email: tokenResponse.email,
@@ -44,7 +41,6 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({
       user: null,
       accessToken: null,
-      refreshToken: null,
       isAuthenticated: false,
     });
   },

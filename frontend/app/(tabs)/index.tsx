@@ -8,6 +8,15 @@ import { theme } from '@/constants/theme';
 import { Listing } from '@/types/listing';
 import { consumeListingsStale } from '@/utils/refreshFlags';
 
+function LoadMoreFooter({ loadingMore }: { loadingMore: boolean }) {
+  if (!loadingMore) return null;
+  return (
+    <View style={styles.footer}>
+      <ActivityIndicator color={theme.colors.primary} size="small" />
+    </View>
+  );
+}
+
 function EmptyState() {
   return (
     <View style={styles.emptyState}>
@@ -29,7 +38,7 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
 }
 
 export default function HomeScreen() {
-  const { listings, loading, error, refetch } = useListings();
+  const { listings, totalCount, loading, loadingMore, error, refetch, loadMore } = useListings();
   const { getFavorited, toggle } = useFavoritesMap(listings);
 
   useFocusEffect(useCallback(() => { if (consumeListingsStale()) refetch(); }, [refetch]));
@@ -72,10 +81,13 @@ export default function HomeScreen() {
         ListHeaderComponent={
           <View style={styles.listHeader}>
             <Text style={styles.heading}>Available Spots</Text>
-            <Text style={styles.count}>{listings.length} listing{listings.length !== 1 ? 's' : ''}</Text>
+            <Text style={styles.count}>{totalCount} listing{totalCount !== 1 ? 's' : ''}</Text>
           </View>
         }
         ListEmptyComponent={<EmptyState />}
+        ListFooterComponent={<LoadMoreFooter loadingMore={loadingMore} />}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.3}
         refreshControl={
           <RefreshControl
             refreshing={loading}
@@ -145,5 +157,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: theme.colors.primary,
     fontWeight: '600',
+  },
+  footer: {
+    paddingVertical: theme.spacing.lg,
+    alignItems: 'center',
   },
 });

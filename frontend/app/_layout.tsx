@@ -50,6 +50,7 @@ export default function RootLayout() {
   }, []);
 
   const setUnreadCount = useChatStore((s) => s.setUnreadCount);
+  const incrementUnread = useChatStore((s) => s.incrementUnread);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -57,11 +58,12 @@ export default function RootLayout() {
       chatService.getConversations()
         .then((data) => setUnreadCount(data.reduce((sum, c) => sum + c.unreadCount, 0)))
         .catch(() => {});
+      return signalRService.onMessage(() => incrementUnread());
     } else {
       signalRService.disconnect().catch(console.warn);
       setUnreadCount(0);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, setUnreadCount, incrementUnread]);
 
   const { isLoading } = useAuthStore();
 

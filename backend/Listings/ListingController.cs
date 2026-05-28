@@ -19,10 +19,16 @@ namespace OpenSpot.Listings.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetListings(CancellationToken token)
+        public async Task<IActionResult> GetListings(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20,
+            CancellationToken token = default)
         {
+            if (page < 1) page = 1;
+            if (pageSize < 1 || pageSize > 100) pageSize = 20;
+
             var requesterId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var result = await _listingService.GetListingsAsync(requesterId, token);
+            var result = await _listingService.GetListingsAsync(requesterId, page, pageSize, token);
             return result.Status switch
             {
                 ResultStatus.Ok => Ok(result.Data),
@@ -141,6 +147,14 @@ namespace OpenSpot.Listings.Controllers
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
             var result = await _listingService.DeleteListingAsync(id, userId, token);
+
+            if (result.Status == ResultStatus.NoContent)
+            {
+                var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", id.ToString());
+                if (Directory.Exists(uploadsDir))
+                    Directory.Delete(uploadsDir, recursive: true);
+            }
+
             return result.Status switch
             {
                 ResultStatus.NoContent => NoContent(),
@@ -157,6 +171,11 @@ namespace OpenSpot.Listings.Controllers
             if (file == null || file.Length == 0)
                 return BadRequest("No file provided.");
 
+            var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+            string[] allowed = [".jpg", ".jpeg", ".png", ".webp", ".heic"];
+            if (!allowed.Contains(ext))
+                return BadRequest("Unsupported file type. Allowed: jpg, jpeg, png, webp, heic.");
+
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
 
             var listing = await _listingService.GetListingByIdAsync(id, null, token);
@@ -164,8 +183,6 @@ namespace OpenSpot.Listings.Controllers
                 return NotFound("Listing not found.");
             if (listing.Data!.OwnerId != userId)
                 return StatusCode(403, "You do not own this listing.");
-
-            var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
             var filename = $"{Guid.NewGuid()}{ext}";
             var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", id.ToString());
             Directory.CreateDirectory(uploadsDir);

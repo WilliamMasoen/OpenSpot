@@ -158,6 +158,18 @@ namespace OpenSpot.Auth
             return ServiceResult<bool?>.NoContent();
         }
 
+        public async Task<ServiceResult<bool?>> ResendVerificationEmailAsync(string email, CancellationToken token)
+        {
+            var user = await _userManager.FindByEmailAsync(email);
+
+            // Always return NoContent to avoid email enumeration
+            if (user == null || user.EmailConfirmed)
+                return ServiceResult<bool?>.NoContent();
+
+            await SendVerificationEmailAsync(user);
+            return ServiceResult<bool?>.NoContent();
+        }
+
         private async Task<TokenResponseDto> GenerateTokensAsync(User user, CancellationToken token)
         {
             // Clean up expired tokens for this user

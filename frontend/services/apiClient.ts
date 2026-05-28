@@ -13,21 +13,27 @@ function getBaseUrl(): string {
 
 const BASE_URL = getBaseUrl();
 
+let _refreshPromise: Promise<string | null> | null = null;
+
 async function tryRefresh(): Promise<string | null> {
-  const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
-  if (!refreshToken) return null;
+  if (_refreshPromise) return _refreshPromise;
+  _refreshPromise = (async () => {
+    const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+    if (!refreshToken) return null;
 
-  const response = await fetch(`${BASE_URL}/api/auth/refresh`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refreshToken }),
-  });
+    const response = await fetch(`${BASE_URL}/api/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    });
 
-  if (!response.ok) return null;
+    if (!response.ok) return null;
 
-  const tokenResponse: TokenResponse = await response.json();
-  await useAuthStore.getState().setAuth(tokenResponse);
-  return tokenResponse.accessToken;
+    const tokenResponse: TokenResponse = await response.json();
+    await useAuthStore.getState().setAuth(tokenResponse);
+    return tokenResponse.accessToken;
+  })().finally(() => { _refreshPromise = null; });
+  return _refreshPromise;
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
