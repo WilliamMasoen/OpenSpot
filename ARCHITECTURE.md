@@ -12,11 +12,13 @@ A parking spot rental marketplace for downtown Toronto condos. Owners post parki
 4. [Database Design](#4-database-design)
 5. [Authentication & Security](#5-authentication--security)
 6. [Real-Time Chat](#6-real-time-chat)
-7. [Frontend Architecture](#7-frontend-architecture)
-8. [Key Data Flows](#8-key-data-flows)
-9. [Image Storage](#9-image-storage)
-10. [Geolocation & Search](#10-geolocation--search)
-11. [Known Limitations & Future Work](#11-known-limitations--future-work)
+7. [Push Notifications](#7-push-notifications)
+8. [Logging & Audit](#8-logging--audit)
+9. [Frontend Architecture](#9-frontend-architecture)
+10. [Key Data Flows](#10-key-data-flows)
+11. [Image Storage](#11-image-storage)
+12. [Geolocation & Search](#12-geolocation--search)
+13. [Known Limitations & Future Work](#13-known-limitations--future-work)
 
 ---
 
@@ -30,6 +32,7 @@ A parking spot rental marketplace for downtown Toronto condos. Owners post parki
 │  Zustand (auth state, unread count)              │
 │  Custom hooks → apiClient → fetch                │
 │  @microsoft/signalr (WebSocket client)           │
+│  expo-notifications (push token + handler)       │
 └──────────────┬──────────────────────────────────┘
                │ HTTPS + WSS
                ▼
@@ -42,6 +45,9 @@ A parking spot rental marketplace for downtown Toronto condos. Owners post parki
 │  SignalR Hub (WebSocket server)                  │
 │  Nominatim (geocoding via HTTP)                  │
 │  MailKit (SMTP email)                            │
+│  Expo Push API (push notifications)              │
+│  Serilog (structured request logging)            │
+│  IAuditService (business event audit trail)      │
 │  Static file serving (uploaded images)           │
 └──────────────┬──────────────────────────────────┘
                │
@@ -50,10 +56,11 @@ A parking spot rental marketplace for downtown Toronto condos. Owners post parki
 │               PostgreSQL                         │
 │  Users, Listings, Images, Favorites              │
 │  Conversations, Messages, RefreshTokens          │
+│  PushTokens, AuditLogs                          │
 └─────────────────────────────────────────────────┘
 ```
 
-There is no separate API gateway, message queue, or cache layer in Phase 1. The backend is a single ASP.NET Core process that handles HTTP requests, WebSocket connections, database access, file I/O, and outbound email.
+There is no separate API gateway, message queue, or cache layer in Phase 1. The backend is a single ASP.NET Core process that handles HTTP requests, WebSocket connections, database access, file I/O, and outbound email/push notifications.
 
 ---
 
@@ -69,7 +76,7 @@ There is no separate API gateway, message queue, or cache layer in Phase 1. The 
 ### Why React Native / Expo?
 
 - **Cross-platform**: One codebase for iOS and Android.
-- **Expo managed workflow**: Simplifies builds, native modules, and permissions (camera, location, secure storage).
+- **Expo managed workflow**: Simplifies builds, native modules, and permissions (camera, location, secure storage, notifications).
 - **Expo Router**: File-based routing (similar to Next.js) gives a clean convention for screens and navigation groups.
 - **New Architecture enabled**: Hermes + JSI for better performance.
 
@@ -118,8 +125,8 @@ Controllers switch on `result.Status` to return the correct HTTP status code. Th
 
 Everything is registered in `Program.cs` via the built-in .NET DI container:
 
-- `Scoped`: `ApplicationDbContext`, `IAuthService`, `IListingService`, `IConversationService`, `IEmailService`
-- `HttpClient` with `IHttpClientFactory`: `IGeocodingService` (Nominatim) — gets a preconfigured `HttpClient` with `User-Agent` header and 5-second timeout
+- `Scoped`: `ApplicationDbContext`, `IAuthService`, `IListingService`, `IConversationService`, `IEmailService`, `IAuditService`, `IPushNotificationService`
+- `HttpClient` with `IHttpClientFactory`: `IGeocodingService` (Nominatim) — gets a preconfigured `HttpClient` with `User-Agent` header and 5-second timeout. `PushNotificationService` uses `IHttpClientFactory` to create a plain client per call.
 - `Singleton` (SignalR default): `IHubContext<ChatHub>` — injected into `ConversationService` to push messages
 
 ### Seeding
@@ -141,7 +148,8 @@ User (ASP.NET Identity)
  ├── owns many Listing
  ├── has many UserFavorite → Listing
  ├── participates in many Conversation (as Buyer or Owner)
- └── has many RefreshToken
+ ├── has many RefreshToken
+ └── has many PushToken
 
 Listing
  ├── has many ListingImage
@@ -150,6 +158,8 @@ Listing
 
 Conversation
  └── has many Message
+
+AuditLog  (standalone, referenced by UserId string)
 ```
 
 ### Schema Details
@@ -163,6 +173,7 @@ Conversation
 | LastName | string | |
 | PhoneNumber | string? | |
 | EmailConfirmed | bool | Must be true to login |
+| CreatedAt | DateTime | UTC, set on registration |
 
 **Listings**
 | Column | Type | Notes |
@@ -226,6 +237,26 @@ Conversation
 | SentAt | DateTime | UTC |
 | IsRead | bool | |
 
+**PushTokens**
+| Column | Type | Notes |
+|---|---|---|
+| Id | Guid | PK |
+| UserId | string | FK → User |
+| Token | string | Expo push token (`ExponentPushToken[...]`), unique index |
+| CreatedAt | DateTime | UTC |
+
+**AuditLogs**
+| Column | Type | Notes |
+|---|---|---|
+| Id | Guid | PK |
+| UserId | string? | User who performed the action (null for anonymous) |
+| Action | string | e.g. `auth.login`, `listing.created`, `listing.deleted` |
+| EntityType | string? | e.g. `User`, `Listing` |
+| EntityId | string? | ID of the affected entity |
+| Details | string? | Free-text or JSON extra context |
+| IpAddress | string? | Requester IP from `IHttpContextAccessor` |
+| CreatedAt | DateTime | UTC |
+
 ### Pagination
 
 The `GET /api/listings` endpoint returns a `PagedResult<GetListingDto>` instead of a flat array:
@@ -248,6 +279,7 @@ The `GET /api/listings` endpoint returns a `PagedResult<GetListingDto>` instead 
 - **`int` for Price**: Avoids floating-point rounding. Convention is cents (e.g. 15000 = $150.00), though this isn't enforced in Phase 1.
 - **Nullable coordinates**: Geocoding can fail (API timeout, unrecognized address). Listings can still be created without coordinates — they just won't appear in location-based searches.
 - **Conversations store both BuyerId and OwnerId**: Denormalized from Listing for fast query access without a join back to Listing on every conversation load.
+- **PushToken unique on Token, not UserId**: A user can have multiple devices. Uniqueness is on the token string itself — the same device can't register twice, but a user can have as many rows as devices.
 
 ---
 
@@ -330,14 +362,15 @@ Sender device          Backend              Recipient device
      │                    │                      │
      │  POST /messages ──►│                      │
      │                    │ Save to DB           │
-     │                    │ SignalR push ────────►│
-     │◄── 201 Created     │                      │ onMessage fires
-                                                  │ setMessages(prev => [...prev, msg])
+     │                    │ SignalR push ────────►│ (if connected)
+     │                    │ Push notification ───►│ (always, via Expo)
+     │◄── 201 Created     │                      │
 ```
 
 Messages are delivered by two paths:
 1. **HTTP**: The sender gets the created message back as the POST response. The frontend adds it to local state immediately.
-2. **SignalR**: The backend pushes the same message to the recipient's WebSocket connection. The recipient's `useMessages` hook appends it to their local state.
+2. **SignalR**: The backend pushes the same message to the recipient's WebSocket connection if they're online. The recipient's `useMessages` hook appends it to their local state.
+3. **Push notification**: The backend always sends a push notification to the recipient's registered devices (see Section 7). If the app is in the foreground, the OS delivers it silently or via in-app handler. If backgrounded or closed, a system notification appears.
 
 The sender does NOT receive their own message via SignalR — they get it via the HTTP response. This avoids duplicates.
 
@@ -387,13 +420,119 @@ The unread count displayed on the Chat tab badge is managed by `chatStore` (Zust
 
 ---
 
-## 7. Frontend Architecture
+## 7. Push Notifications
+
+### Architecture
+
+OpenSpot uses **Expo Push Notifications** as the delivery layer. Expo relays notifications to Apple APNs (iOS) and Google FCM (Android), removing the need to manage credentials for both platforms during development.
+
+```
+Backend                     Expo Push Service         Device
+   │                              │                     │
+   │  POST exp.host/push/send ───►│                     │
+   │  { to: token, title, body }  │  APNs / FCM  ──────►│ system notification
+   │                              │                     │   (if app backgrounded)
+   │                              │                     │   or in-app handler
+   │                              │                     │   (if app foregrounded)
+```
+
+### Token Lifecycle
+
+1. **On login**: The frontend requests notification permission (`requestPermissionsAsync`). If granted, it calls `getExpoPushTokenAsync()` to get a device-specific `ExponentPushToken[...]` string and `POST /api/users/push-token` to store it.
+2. **On logout**: The frontend calls `DELETE /api/users/push-token` to remove the token, stopping notifications to that device.
+3. **Multiple devices**: A user can have multiple push token rows — one per device. All are notified when a message arrives.
+
+### Backend Flow
+
+`PushNotificationService.SendToUserAsync(userId, title, body)`:
+1. Looks up all `PushToken` rows for that user.
+2. If none, returns immediately (user hasn't granted permission or hasn't logged in on a real device).
+3. Sends a single HTTP POST to `https://exp.host/push/send` with an array of messages (one per token).
+4. Failures are logged as warnings but never throw — a failed push notification must not fail the message send.
+
+`ConversationService.SendMessageAsync` calls push as a fire-and-forget (`_ = _push.SendToUserAsync(...)`) so the HTTP response to the sender is not delayed by the Expo API call.
+
+### Frontend Notification Handler
+
+`Notifications.setNotificationHandler` (set at module level in `_layout.tsx`) configures how notifications are displayed when the app is in the foreground:
+
+```typescript
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
+```
+
+Android requires a **notification channel** to be created before notifications can be shown. This is done in `registerPushToken()` via `setNotificationChannelAsync`.
+
+### Production Notes
+
+- During development, push notifications **only work on a real physical device** (not simulators/emulators). Expo Go on a physical device works fine.
+- For production App Store / Play Store builds, APNs and FCM credentials must be configured in EAS (Expo Application Services). Until then, Expo's development push relay handles delivery.
+- Expo Push is free with no per-message cost. APNs and FCM are also free.
+
+---
+
+## 8. Logging & Audit
+
+### Two-Layer Approach
+
+OpenSpot uses two complementary logging mechanisms:
+
+**Layer 1 — Serilog request logging** (infrastructure):
+- Automatically logs every HTTP request: method, path, status code, duration, and user identity.
+- Configured via `builder.Host.UseSerilog(...)` and `app.UseSerilogRequestLogging()`.
+- Zero manual code per endpoint. Output goes to the console (captured by the host environment in production).
+
+**Layer 2 — Audit table** (business events):
+- Records meaningful business actions for queryable history.
+- `IAuditService.Log(action, userId, entityType, entityId, details)` adds a row to the `AuditLogs` table.
+- The call is **synchronous and context-free** — it just appends to the `DbContext` change tracker. The row is saved atomically in the same `SaveChangesAsync` call as the business operation (no extra DB roundtrip, no partial audit if the main operation fails).
+- IP address is captured automatically via `IHttpContextAccessor`.
+
+### Audited Events
+
+| Action | Trigger |
+|---|---|
+| `user.registered` | New account created |
+| `auth.login` | Successful login |
+| `listing.created` | New listing submitted |
+| `listing.updated` | Listing fields edited |
+| `listing.deleted` | Listing removed |
+| `listing.availability_changed` | Owner marks as rented/available |
+| `listing.favorited` | User adds to favorites |
+| `listing.unfavorited` | User removes from favorites |
+
+### Querying Audit Logs
+
+Audit logs live in the `AuditLogs` table in PostgreSQL and can be queried directly:
+
+```sql
+-- All actions by a specific user
+SELECT * FROM "AuditLogs" WHERE "UserId" = '...' ORDER BY "CreatedAt" DESC;
+
+-- All deletions in the last 7 days
+SELECT * FROM "AuditLogs" WHERE "Action" = 'listing.deleted'
+  AND "CreatedAt" > NOW() - INTERVAL '7 days';
+
+-- Login history for a user
+SELECT "IpAddress", "CreatedAt" FROM "AuditLogs"
+  WHERE "Action" = 'auth.login' AND "UserId" = '...'
+  ORDER BY "CreatedAt" DESC;
+```
+
+---
+
+## 9. Frontend Architecture
 
 ### File-Based Routing (Expo Router)
 
 ```
 app/
-├── _layout.tsx               Root layout: auth guard + SignalR + hydration + onboarding check
+├── _layout.tsx               Root layout: auth guard + SignalR + push notifications + hydration
 ├── onboarding.tsx            First-time tutorial (4 slides, skippable)
 ├── index.tsx                 Redirect (handled by _layout)
 ├── (auth)/
@@ -403,7 +542,7 @@ app/
 │   └── forgot-password.tsx
 ├── (tabs)/
 │   ├── _layout.tsx           Bottom tab bar
-│   ├── index.tsx             Home — listing grid
+│   ├── index.tsx             Home — listing grid with sort/price filters + nearest sort
 │   ├── search.tsx            Text + location search
 │   ├── post.tsx              Placeholder (tab opens modal)
 │   ├── chat.tsx              Conversation list
@@ -411,6 +550,7 @@ app/
 ├── create.tsx                Modal — create new listing
 ├── listing/[id].tsx          Listing detail
 ├── conversation/[id].tsx     Chat thread
+├── edit-listing/[id].tsx     Modal — edit existing listing
 ├── edit-profile.tsx          Edit name/phone
 ├── my-listings.tsx           Owner's listings management
 └── favorites.tsx             Saved listings
@@ -462,10 +602,11 @@ Each hook encapsulates one domain's data-fetching logic:
 | Hook | What it manages |
 |---|---|
 | `useAuth` | login, register, logout, forgot-password |
-| `useListings` | paginated listings with infinite scroll (`loadMore`, `totalCount`) |
-| `useMyListings` | owner's listings + delete |
+| `useListings` | paginated listings with infinite scroll, sort/price filters, nearest sort with location |
+| `useMyListings` | owner's listings + delete + availability toggle |
 | `useCreateListing` | creation + sequential image uploads |
-| `useFavoritesMap` | optimistic toggle for a list of listings |
+| `useEditListing` | update listing fields + new image uploads |
+| `useFavoritesMap` | optimistic toggle backed by `updateListing` callback |
 | `useMyFavorites` | favorited listings + optimistic remove |
 | `useSearch` | text + location search |
 | `useConversations` | conversation list (re-fetches on tab focus) |
@@ -473,14 +614,12 @@ Each hook encapsulates one domain's data-fetching logic:
 
 ### Optimistic Favorites
 
-`useFavoritesMap` maintains a `pending` record (`{ [listingId]: boolean }`) that overrides the server state while an API call is in flight:
+`useFavoritesMap` accepts an `updateListing` callback that writes directly into the listings array — this is the single source of truth. On toggle:
 
-1. User taps heart → read current state from `pending` or `listings` array
-2. Write optimistic opposite into `pending` → UI updates immediately
-3. API call resolves → overwrite `pending` with server's actual value
-4. API call fails → revert `pending` to original value
-
-The hook uses a `useRef` (`pendingRef`) so that the toggle callback always reads the latest pending state without needing to be in its dependency array.
+1. User taps heart → read current `isFavorited` from the listings array
+2. Call `updateListing(id, { isFavorited: !current })` → UI updates immediately
+3. API call resolves → call `updateListing(id, { isFavorited: result.isFavorited })` with server value
+4. API call fails → revert via `updateListing(id, { isFavorited: current })`
 
 ### API Client
 
@@ -494,32 +633,35 @@ The hook uses a `useRef` (`pendingRef`) so that the toggle callback always reads
 
 ---
 
-## 8. Key Data Flows
+## 10. Key Data Flows
 
 ### Registration Flow
 
 ```
 1. User fills form → register(dto)
 2. POST /api/auth/register
-3. Backend: FindByEmail (conflict check) → CreateAsync (hash password) → AddToRoleAsync("User") → SendVerificationEmail → GenerateTokensAsync
+3. Backend: FindByEmail (conflict check) → CreateAsync (hash password) → AddToRoleAsync("User")
+           → SendVerificationEmail → audit log "user.registered" → GenerateTokensAsync
 4. Return TokenResponseDto (access token + refresh token + user info)
 5. Frontend: setAuth() → SecureStore.setItem(refresh token) → Zustand update
 6. AuthGuard redirects to /(tabs)
-7. User gets verification email → clicks link → GET /api/auth/verify-email → EmailConfirmed = true
-   (Without this step, login is blocked)
+7. Frontend: registerPushToken() runs → permission request → token saved to backend
+8. User gets verification email → clicks link → GET /api/auth/verify-email → EmailConfirmed = true
 ```
 
-### Message Send Flow
+### Message Send Flow (with Push Notification)
 
 ```
 1. User types message → tap send
 2. useMessages.sendMessage(body)
 3. POST /api/conversations/{id}/messages (HTTP)
-4. Backend: validate sender is in conversation → save Message to DB
-5. Backend: SignalR push to recipient's group
-6. Backend: return 201 Created + MessageDto
-7. Frontend (sender): append message to local state from HTTP response
-8. Frontend (recipient): onMessage handler fires → append to state
+4. Backend: validate sender → save Message to DB → audit log "message.sent"
+5. Backend: SignalR push to recipient's group (if connected)
+6. Backend: fire-and-forget push to Expo Push API → Expo relays to APNs/FCM → device notification
+7. Backend: return 201 Created + MessageDto
+8. Frontend (sender): append message to local state from HTTP response
+9. Frontend (recipient, foregrounded): onMessage SignalR handler fires → append to state
+   Frontend (recipient, backgrounded): system notification appears
 ```
 
 ### Listing Search Flow
@@ -531,6 +673,17 @@ The hook uses a `useRef` (`pendingRef`) so that the toggle callback always reads
 4. Backend: EF Core query with ILike for text match → ToListAsync (all text matches in memory)
 5. If lat/lng provided: Haversine filter in C# memory (< radiusKm)
 6. Return filtered list
+```
+
+### Nearest Listings Flow
+
+```
+1. App launches → silent location permission check (getForegroundPermissionsAsync)
+2. If granted: getCurrentPositionAsync → setLocation(lat, lng) → setFilters("nearest", maxPrice)
+3. GET /api/listings?sortBy=nearest&lat=...&lng=...
+4. Backend: fetch all available listings → sort in C# memory by Haversine distance → page
+5. Frontend: shows "Showing spots nearest to you" banner
+6. User taps "Nearest" chip without permission → requestForegroundPermissionsAsync → same flow
 ```
 
 ### Token Refresh Flow (Silent, on Startup)
@@ -546,7 +699,7 @@ The hook uses a `useRef` (`pendingRef`) so that the toggle callback always reads
 
 ---
 
-## 9. Image Storage
+## 11. Image Storage
 
 Images are stored on the **server's local filesystem** under `wwwroot/uploads/{listingId}/{uuid}.{ext}`. They are served as static files by ASP.NET Core's `UseStaticFiles()` middleware.
 
@@ -563,7 +716,7 @@ The absolute URL is stored in the database (e.g. `http://host/uploads/{listingId
 
 ---
 
-## 10. Geolocation & Search
+## 12. Geolocation & Search
 
 ### Geocoding (Address → Coordinates)
 
@@ -585,6 +738,8 @@ The search endpoint accepts `lat`, `lng`, and `radius` (km, default 5). The back
 2. Loads all matching rows into C# memory.
 3. Filters in C# using the Haversine formula.
 
+The `GET /api/listings` endpoint also accepts `lat`, `lng`, and `sortBy=nearest`, which sorts all available listings by distance in C# memory before paging.
+
 The **Haversine formula** calculates great-circle distance between two lat/lng points:
 
 ```
@@ -592,13 +747,11 @@ a = sin²(Δlat/2) + cos(lat1)·cos(lat2)·sin²(Δlon/2)
 distance = 2R · atan2(√a, √(1-a))    where R = 6371 km
 ```
 
-This is accurate for the distances involved (city-scale, < 50 km).
-
 **Why not PostGIS?** PostGIS (PostgreSQL geospatial extension) would push the distance calculation into the database and scale much better. For Phase 1 with a small dataset in one city, in-memory Haversine is sufficient.
 
 ---
 
-## 11. Known Limitations & Future Work
+## 13. Known Limitations & Future Work
 
 ### Phase 1 Limitations
 
@@ -607,6 +760,8 @@ This is accurate for the distances involved (city-scale, < 50 km).
 | Image storage | Local disk (`wwwroot/uploads/`) | Object storage (S3, Azure Blob) |
 | Geocoding | Nominatim (free, rate-limited) | Google Maps / Mapbox Geocoding API |
 | Location search | In-memory Haversine after SQL text filter | PostGIS `ST_DWithin` query entirely in SQL |
+| Push (dev) | Expo dev relay (physical device only) | EAS build with APNs + FCM credentials |
+| Audit logs | Plain text `Details` field | JSON column for structured querying |
 
 ### Phase 2: Escrow Payments
 

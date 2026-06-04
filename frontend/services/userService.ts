@@ -17,4 +17,6 @@ export interface UpdateProfileDto {
 export const userService = {
   getMe: () => apiClient.get<UserProfile>('/api/users/me'),
   updateMe: (dto: UpdateProfileDto) => apiClient.put<UserProfile>('/api/users/me', dto),
+  savePushToken: (token: string) => apiClient.post<void>('/api/users/push-token', { token }),
+  deletePushToken: (token: string) => apiClient.delete<void>('/api/users/push-token', { token }),
 };

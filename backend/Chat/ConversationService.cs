@@ -6,6 +6,7 @@ using OpenSpot.Chat.Interfaces;
 using OpenSpot.Chat.Models;
 using OpenSpot.Common;
 using OpenSpot.Data;
+using OpenSpot.Notifications;
 
 namespace OpenSpot.Chat.Services
 {
@@ -13,11 +14,13 @@ namespace OpenSpot.Chat.Services
     {
         private readonly ApplicationDbContext _db;
         private readonly IHubContext<ChatHub> _hub;
+        private readonly IPushNotificationService _push;
 
-        public ConversationService(ApplicationDbContext db, IHubContext<ChatHub> hub)
+        public ConversationService(ApplicationDbContext db, IHubContext<ChatHub> hub, IPushNotificationService push)
         {
             _db = db;
             _hub = hub;
+            _push = push;
         }
 
         public async Task<ServiceResult<GetConversationDto>> GetOrCreateConversationAsync(Guid listingId, string buyerId, CancellationToken token)
@@ -208,6 +211,8 @@ namespace OpenSpot.Chat.Services
             var recipientId = conv.BuyerId == senderId ? conv.OwnerId : conv.BuyerId;
             await _hub.Clients.Group($"user_{recipientId}")
                 .SendAsync("ReceiveMessage", dto, conversationId.ToString(), cancellationToken: token);
+
+            _ = _push.SendToUserAsync(recipientId, senderName, body);
 
             return ServiceResult<GetMessageDto>.Created(dto);
         }

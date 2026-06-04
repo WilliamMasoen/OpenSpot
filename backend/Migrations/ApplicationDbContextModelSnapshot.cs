@@ -342,6 +342,33 @@ namespace backend.Migrations
                     b.ToTable("UserFavorites");
                 });
 
+            modelBuilder.Entity("OpenSpot.Notifications.PushToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Token")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("PushTokens");
+                });
+
             modelBuilder.Entity("OpenSpot.RefreshTokens.RefreshToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -581,6 +608,17 @@ namespace backend.Migrations
                         .IsRequired();
 
                     b.Navigation("Listing");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("OpenSpot.Notifications.PushToken", b =>
+                {
+                    b.HasOne("OpenSpot.Users.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("User");
                 });

@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using OpenSpot.Audit;
 using OpenSpot.Auth;
+using OpenSpot.Notifications;
 using OpenSpot.Chat.Hubs;
 using OpenSpot.Chat.Interfaces;
 using OpenSpot.Chat.Services;
@@ -115,6 +116,7 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IListingService, ListingService>();
 builder.Services.AddScoped<IConversationService, ConversationService>();
+builder.Services.AddScoped<IPushNotificationService, PushNotificationService>();
 builder.Services.AddHttpClient<IGeocodingService, NominatimGeocodingService>(client =>
 {
     client.DefaultRequestHeaders.Add("User-Agent", "OpenSpot/1.0 (openspot-app)");

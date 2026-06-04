@@ -35,7 +35,7 @@ export function useMessages(conversationId: string) {
   useEffect(() => {
     return signalRService.onMessage((msg, convId) => {
       if (convId === conversationId) {
-        setMessages((prev) => [...prev, msg]);
+        setMessages((prev) => prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]);
         chatService.markRead(conversationId).catch(() => {});
         decrementUnread(1);
       }

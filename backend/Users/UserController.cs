@@ -2,6 +2,8 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using OpenSpot.Data;
+using OpenSpot.Notifications;
 using OpenSpot.Users.DTOs;
 using OpenSpot.Users.Models;
 using Microsoft.AspNetCore.Identity;
@@ -14,10 +16,12 @@ namespace OpenSpot.Users.Controllers
     public class UsersController : ControllerBase
     {
         private readonly UserManager<User> _userManager;
+        private readonly ApplicationDbContext _db;
 
-        public UsersController(UserManager<User> userManager)
+        public UsersController(UserManager<User> userManager, ApplicationDbContext db)
         {
             _userManager = userManager;
+            _db = db;
         }
 
         [HttpGet]
@@ -73,6 +77,46 @@ namespace OpenSpot.Users.Controllers
                 Email = user.Email ?? string.Empty,
                 PhoneNumber = user.PhoneNumber ?? string.Empty
             });
+        }
+
+        [HttpPost("push-token")]
+        public async Task<IActionResult> SavePushTokenAsync([FromBody] SavePushTokenDto dto, CancellationToken token)
+        {
+            if (string.IsNullOrWhiteSpace(dto.Token))
+                return BadRequest("Token is required.");
+
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+
+            var exists = await _db.PushTokens.AnyAsync(p => p.Token == dto.Token, token);
+            if (!exists)
+            {
+                _db.PushTokens.Add(new PushToken
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = userId,
+                    Token = dto.Token,
+                    CreatedAt = DateTime.UtcNow,
+                });
+                await _db.SaveChangesAsync(token);
+            }
+
+            return NoContent();
+        }
+
+        [HttpDelete("push-token")]
+        public async Task<IActionResult> DeletePushTokenAsync([FromBody] SavePushTokenDto dto, CancellationToken token)
+        {
+            if (string.IsNullOrWhiteSpace(dto.Token))
+                return BadRequest("Token is required.");
+
+            var row = await _db.PushTokens.FirstOrDefaultAsync(p => p.Token == dto.Token, token);
+            if (row is not null)
+            {
+                _db.PushTokens.Remove(row);
+                await _db.SaveChangesAsync(token);
+            }
+
+            return NoContent();
         }
 
         [HttpPut("me")]
