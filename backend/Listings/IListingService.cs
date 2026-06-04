@@ -5,7 +5,7 @@ namespace OpenSpot.Listings.Interfaces
 {
     public interface IListingService
     {
-        Task<ServiceResult<PagedResult<GetListingDto>?>> GetListingsAsync(string? requesterId, int page, int pageSize, CancellationToken token);
+        Task<ServiceResult<PagedResult<GetListingDto>?>> GetListingsAsync(string? requesterId, int page, int pageSize, string? sortBy, int? maxPrice, double? lat, double? lng, CancellationToken token);
         Task<ServiceResult<GetListingDto?>> GetListingByIdAsync(Guid id, string? requesterId, CancellationToken token);
         Task<ServiceResult<List<GetListingDto>?>> GetMyListingsAsync(string ownerId, CancellationToken token);
         Task<ServiceResult<GetListingDto?>> CreateNewListingAsync(string ownerId, CreateListingDto dto, CancellationToken token);

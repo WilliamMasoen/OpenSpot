@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using OpenSpot.Audit;
 using OpenSpot.Chat.Models;
 using OpenSpot.Data.Interfaces;
 using OpenSpot.Listings.Models;
@@ -22,6 +23,7 @@ namespace OpenSpot.Data
         public DbSet<RefreshToken> RefreshTokens { get; set; }
         public DbSet<Conversation> Conversations { get; set; }
         public DbSet<Message> Messages { get; set; }
+        public DbSet<AuditLog> AuditLogs { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

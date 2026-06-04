@@ -22,13 +22,17 @@ namespace OpenSpot.Listings.Controllers
         public async Task<IActionResult> GetListings(
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20,
+            [FromQuery] string? sortBy = null,
+            [FromQuery] int? maxPrice = null,
+            [FromQuery] double? lat = null,
+            [FromQuery] double? lng = null,
             CancellationToken token = default)
         {
             if (page < 1) page = 1;
             if (pageSize < 1 || pageSize > 100) pageSize = 20;
 
             var requesterId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var result = await _listingService.GetListingsAsync(requesterId, page, pageSize, token);
+            var result = await _listingService.GetListingsAsync(requesterId, page, pageSize, sortBy, maxPrice, lat, lng, token);
             return result.Status switch
             {
                 ResultStatus.Ok => Ok(result.Data),

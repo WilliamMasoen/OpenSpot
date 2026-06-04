@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using OpenSpot.Audit;
 using OpenSpot.Common;
 using OpenSpot.Data;
 using OpenSpot.Listings.DTOs;
@@ -12,28 +13,66 @@ namespace OpenSpot.Listings.Services
     {
         private readonly ApplicationDbContext _context;
         private readonly IGeocodingService _geocoding;
+        private readonly IAuditService _audit;
 
-        public ListingService(ApplicationDbContext context, IGeocodingService geocoding)
+        public ListingService(ApplicationDbContext context, IGeocodingService geocoding, IAuditService audit)
         {
             _context = context;
             _geocoding = geocoding;
+            _audit = audit;
         }
 
-        public async Task<ServiceResult<PagedResult<GetListingDto>?>> GetListingsAsync(string? requesterId, int page, int pageSize, CancellationToken token)
+        public async Task<ServiceResult<PagedResult<GetListingDto>?>> GetListingsAsync(string? requesterId, int page, int pageSize, string? sortBy, int? maxPrice, double? lat, double? lng, CancellationToken token)
         {
-            var query = _context.Listing.Where(l => l.IsAvailable).OrderByDescending(l => l.CreatedAt);
-            var totalCount = await query.CountAsync(token);
+            var baseQuery = _context.Listing.Where(l => l.IsAvailable);
 
-            var listings = await query
-                .Include(l => l.Images)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .ToListAsync(token);
+            if (maxPrice.HasValue)
+                baseQuery = baseQuery.Where(l => l.Price <= maxPrice.Value);
+
+            bool nearestSort = sortBy == "nearest" && lat.HasValue && lng.HasValue;
+
+            IQueryable<Listing> query;
+            if (nearestSort)
+                query = baseQuery.Include(l => l.Images);
+            else
+                query = sortBy switch
+                {
+                    "price_asc" => baseQuery.OrderBy(l => l.Price),
+                    "price_desc" => baseQuery.OrderByDescending(l => l.Price),
+                    _ => baseQuery.OrderByDescending(l => l.CreatedAt),
+                };
+
+            var allListings = nearestSort
+                ? await query.ToListAsync(token)
+                : null;
+
+            List<Listing> pagedListings;
+            int totalCount;
+
+            if (nearestSort)
+            {
+                var sorted = allListings!
+                    .OrderBy(l => l.Latitude.HasValue && l.Longitude.HasValue
+                        ? HaversineKm(lat!.Value, lng!.Value, l.Latitude.Value, l.Longitude.Value)
+                        : double.MaxValue)
+                    .ToList();
+                totalCount = sorted.Count;
+                pagedListings = sorted.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+            }
+            else
+            {
+                totalCount = await query.CountAsync(token);
+                pagedListings = await query
+                    .Include(l => l.Images)
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync(token);
+            }
 
             var favoriteIds = await GetFavoriteIdsAsync(requesterId, token);
             var result = new PagedResult<GetListingDto>
             {
-                Items = listings.Select(l => new GetListingDto(l, favoriteIds?.Contains(l.Id))).ToList(),
+                Items = pagedListings.Select(l => new GetListingDto(l, favoriteIds?.Contains(l.Id))).ToList(),
                 TotalCount = totalCount,
                 Page = page,
                 PageSize = pageSize,
@@ -100,6 +139,7 @@ namespace OpenSpot.Listings.Services
             };
 
             await _context.Listing.AddAsync(listing, token);
+            _audit.Log("listing.created", ownerId, "Listing", listing.Id.ToString(), $"title={listing.Title}");
             await _context.SaveChangesAsync(token);
 
             return ServiceResult<GetListingDto?>.Created(new GetListingDto(listing));
@@ -122,6 +162,7 @@ namespace OpenSpot.Listings.Services
             listing.EndDate = dto.EndDate;
             listing.IsAvailable = dto.IsAvailable;
 
+            _audit.Log("listing.updated", requesterId, "Listing", id.ToString());
             await _context.SaveChangesAsync(token);
             return ServiceResult<GetListingDto?>.Ok(new GetListingDto(listing));
         }
@@ -136,6 +177,7 @@ namespace OpenSpot.Listings.Services
                 return ServiceResult<bool?>.Fail("You do not own this listing.", ResultStatus.Forbidden);
 
             _context.Listing.Remove(listing);
+            _audit.Log("listing.deleted", requesterId, "Listing", id.ToString(), $"title={listing.Title}");
             await _context.SaveChangesAsync(token);
             return ServiceResult<bool?>.NoContent();
         }
@@ -198,6 +240,7 @@ namespace OpenSpot.Listings.Services
             if (existing != null)
             {
                 _context.UserFavorites.Remove(existing);
+                _audit.Log("listing.unfavorited", userId, "Listing", listingId.ToString());
                 await _context.SaveChangesAsync(token);
                 return ServiceResult<bool?>.Ok(false);
             }
@@ -208,6 +251,7 @@ namespace OpenSpot.Listings.Services
                 ListingId = listingId,
                 CreatedAt = DateTime.UtcNow,
             }, token);
+            _audit.Log("listing.favorited", userId, "Listing", listingId.ToString());
             await _context.SaveChangesAsync(token);
             return ServiceResult<bool?>.Ok(true);
         }
@@ -234,6 +278,7 @@ namespace OpenSpot.Listings.Services
                 return ServiceResult<GetListingDto?>.Fail("You do not own this listing.", ResultStatus.Forbidden);
 
             listing.IsAvailable = isAvailable;
+            _audit.Log("listing.availability_changed", requesterId, "Listing", id.ToString(), $"isAvailable={isAvailable}");
             await _context.SaveChangesAsync(token);
             return ServiceResult<GetListingDto?>.Ok(new GetListingDto(listing));
         }

@@ -1,12 +1,74 @@
-import { useCallback } from 'react';
-import { View, Text, FlatList, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
+import { useCallback, useEffect, useRef } from 'react';
+import { View, Text, FlatList, StyleSheet, ActivityIndicator, RefreshControl, ScrollView, TouchableOpacity } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
+import * as Location from 'expo-location';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { ListingCard } from '@/components/ui/ListingCard';
 import { useListings, useFavoritesMap } from '@/hooks/useListings';
 import { theme } from '@/constants/theme';
 import { Listing } from '@/types/listing';
 import { consumeListingsStale } from '@/utils/refreshFlags';
+
+const SORT_OPTIONS = [
+  { label: 'Nearest', value: 'nearest' },
+  { label: 'Newest', value: undefined as string | undefined },
+  { label: 'Price ↑', value: 'price_asc' },
+  { label: 'Price ↓', value: 'price_desc' },
+];
+
+const PRICE_OPTIONS = [
+  { label: 'Any price', value: undefined as number | undefined },
+  { label: '< $100', value: 100 },
+  { label: '< $200', value: 200 },
+  { label: '< $300', value: 300 },
+];
+
+function FilterBar({
+  sortBy,
+  maxPrice,
+  onFilterChange,
+}: {
+  sortBy: string | undefined;
+  maxPrice: number | undefined;
+  onFilterChange: (sortBy: string | undefined, maxPrice: number | undefined) => void;
+}) {
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.filterBar}
+      keyboardShouldPersistTaps="handled"
+    >
+      {SORT_OPTIONS.map((opt) => {
+        const active = sortBy === opt.value;
+        return (
+          <TouchableOpacity
+            key={opt.label}
+            style={[styles.chip, active && styles.chipActive]}
+            onPress={() => onFilterChange(opt.value, maxPrice)}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.chipText, active && styles.chipTextActive]}>{opt.label}</Text>
+          </TouchableOpacity>
+        );
+      })}
+      <View style={styles.chipDivider} />
+      {PRICE_OPTIONS.map((opt) => {
+        const active = maxPrice === opt.value;
+        return (
+          <TouchableOpacity
+            key={opt.label}
+            style={[styles.chip, active && styles.chipActive]}
+            onPress={() => onFilterChange(sortBy, opt.value)}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.chipText, active && styles.chipTextActive]}>{opt.label}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </ScrollView>
+  );
+}
 
 function LoadMoreFooter({ loadingMore }: { loadingMore: boolean }) {
   if (!loadingMore) return null;
@@ -21,8 +83,8 @@ function EmptyState() {
   return (
     <View style={styles.emptyState}>
       <Text style={styles.emptyIcon}>🅿️</Text>
-      <Text style={styles.emptyTitle}>No spots yet</Text>
-      <Text style={styles.emptyBody}>Be the first to post a parking spot in your building.</Text>
+      <Text style={styles.emptyTitle}>No spots found</Text>
+      <Text style={styles.emptyBody}>Try adjusting your filters or check back later.</Text>
     </View>
   );
 }
@@ -38,10 +100,39 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
 }
 
 export default function HomeScreen() {
-  const { listings, totalCount, loading, loadingMore, error, refetch, loadMore, updateListing } = useListings();
+  const { listings, totalCount, loading, loadingMore, error, refetch, loadMore, updateListing, sortBy, maxPrice, setFilters, userLat, setLocation } = useListings();
   const { getFavorited, toggle } = useFavoritesMap(listings, updateListing);
+  const locationRequested = useRef(false);
 
   useFocusEffect(useCallback(() => { if (consumeListingsStale()) refetch(); }, [refetch]));
+
+  useEffect(() => {
+    async function detectLocation() {
+      const { status } = await Location.getForegroundPermissionsAsync();
+      if (status === 'granted') {
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        setLocation(pos.coords.latitude, pos.coords.longitude);
+        if (!locationRequested.current) {
+          setFilters('nearest', maxPrice);
+          locationRequested.current = true;
+        }
+      }
+    }
+    detectLocation();
+  }, []);
+
+  const handleFilterChange = useCallback(async (newSortBy: string | undefined, newMaxPrice: number | undefined) => {
+    if (newSortBy === 'nearest' && userLat == null) {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        setLocation(pos.coords.latitude, pos.coords.longitude);
+      } else {
+        return;
+      }
+    }
+    setFilters(newSortBy, newMaxPrice);
+  }, [userLat, setLocation, setFilters, maxPrice]);
 
   if (loading && listings.length === 0) {
     return (
@@ -79,9 +170,17 @@ export default function HomeScreen() {
         )}
         contentContainerStyle={styles.list}
         ListHeaderComponent={
-          <View style={styles.listHeader}>
-            <Text style={styles.heading}>Available Spots</Text>
-            <Text style={styles.count}>{totalCount} listing{totalCount !== 1 ? 's' : ''}</Text>
+          <View>
+            <View style={styles.listHeader}>
+              <Text style={styles.heading}>Available Spots</Text>
+              <Text style={styles.count}>{totalCount} listing{totalCount !== 1 ? 's' : ''}</Text>
+            </View>
+            <FilterBar sortBy={sortBy} maxPrice={maxPrice} onFilterChange={handleFilterChange} />
+            {sortBy === 'nearest' && userLat != null && (
+              <View style={styles.locationBanner}>
+                <Text style={styles.locationBannerText}>Showing spots nearest to you</Text>
+              </View>
+            )}
           </View>
         }
         ListEmptyComponent={<EmptyState />}
@@ -119,7 +218,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
-    marginBottom: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
   },
   heading: {
     ...theme.typography.heading,
@@ -129,6 +228,39 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: theme.colors.textMuted,
     fontWeight: '500',
+  },
+  filterBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    paddingVertical: theme.spacing.sm,
+    marginBottom: theme.spacing.sm,
+  },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: theme.radius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+  },
+  chipActive: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  chipText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: theme.colors.text,
+  },
+  chipTextActive: {
+    color: '#fff',
+  },
+  chipDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: theme.colors.border,
+    marginHorizontal: theme.spacing.xs,
   },
   emptyState: {
     flex: 1,
@@ -161,5 +293,20 @@ const styles = StyleSheet.create({
   footer: {
     paddingVertical: theme.spacing.lg,
     alignItems: 'center',
+  },
+  locationBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    backgroundColor: theme.colors.primaryLight,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    marginBottom: theme.spacing.sm,
+  },
+  locationBannerText: {
+    fontSize: 13,
+    color: theme.colors.primary,
+    fontWeight: '500',
   },
 });

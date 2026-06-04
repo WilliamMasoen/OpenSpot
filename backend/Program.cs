@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using OpenSpot.Audit;
 using OpenSpot.Auth;
 using OpenSpot.Chat.Hubs;
 using OpenSpot.Chat.Interfaces;
@@ -18,10 +19,20 @@ using OpenSpot.Listings.Geocoding;
 using OpenSpot.Listings.Interfaces;
 using OpenSpot.Listings.Services;
 using OpenSpot.Users.Models;
+using Serilog;
 
 Env.Load();
 
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console()
+    .CreateBootstrapLogger();
+
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Host.UseSerilog((ctx, services, config) => config
+    .ReadFrom.Configuration(ctx.Configuration)
+    .ReadFrom.Services(services)
+    .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj} {Properties:j}{NewLine}{Exception}"));
 
 var connectionString = builder.Configuration["DB_CONNECTION_STRING"]
     ?? throw new Exception("Database connection string is missing.");
@@ -97,7 +108,9 @@ builder.Services.AddAuthentication(options =>
 // --------------------
 // Services
 // --------------------
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IApplicationDbContext>(p => p.GetRequiredService<ApplicationDbContext>());
+builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IListingService, ListingService>();
@@ -145,6 +158,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseStaticFiles();
+app.UseSerilogRequestLogging();
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -181,7 +195,8 @@ static async Task SeedAsync(WebApplication app)
             Email = adminEmail,
             FirstName = adminFirstName,
             LastName = adminLastName,
-            EmailConfirmed = true
+            EmailConfirmed = true,
+            CreatedAt = DateTime.UtcNow,
         };
 
         var result = await userManager.CreateAsync(admin, adminPassword);

@@ -10,8 +10,14 @@ function getBaseUrl(): string {
 }
 
 export const listingService = {
-  getPage: (page: number, pageSize = 20) =>
-    apiClient.get<PagedResult<Listing>>(`/api/listings?page=${page}&pageSize=${pageSize}`),
+  getPage: (page: number, pageSize = 20, sortBy?: string, maxPrice?: number, lat?: number, lng?: number) => {
+    const params = new URLSearchParams({ page: page.toString(), pageSize: pageSize.toString() });
+    if (sortBy) params.set('sortBy', sortBy);
+    if (maxPrice != null) params.set('maxPrice', maxPrice.toString());
+    if (lat != null) params.set('lat', lat.toString());
+    if (lng != null) params.set('lng', lng.toString());
+    return apiClient.get<PagedResult<Listing>>(`/api/listings?${params.toString()}`);
+  },
 
   getById: (id: string) =>
     apiClient.get<Listing>(`/api/listings/${id}`),

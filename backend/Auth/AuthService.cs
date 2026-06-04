@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using OpenSpot.Audit;
 using OpenSpot.Auth.DTOs;
 using OpenSpot.Common;
 using OpenSpot.Config;
@@ -24,19 +25,22 @@ namespace OpenSpot.Auth
         private readonly JwtOptions _jwtOptions;
         private readonly AppOptions _appOptions;
         private readonly IEmailService _emailService;
+        private readonly IAuditService _audit;
 
         public AuthService(
             UserManager<User> userManager,
             ApplicationDbContext context,
             IOptions<JwtOptions> jwtOptions,
             IOptions<AppOptions> appOptions,
-            IEmailService emailService)
+            IEmailService emailService,
+            IAuditService audit)
         {
             _userManager = userManager;
             _context = context;
             _jwtOptions = jwtOptions.Value;
             _appOptions = appOptions.Value;
             _emailService = emailService;
+            _audit = audit;
         }
 
         public async Task<ServiceResult<TokenResponseDto?>> RegisterAsync(RegisterDto dto, CancellationToken token)
@@ -51,7 +55,8 @@ namespace OpenSpot.Auth
                 Email = dto.Email,
                 FirstName = dto.FirstName,
                 LastName = dto.LastName,
-                PhoneNumber = dto.PhoneNumber
+                PhoneNumber = dto.PhoneNumber,
+                CreatedAt = DateTime.UtcNow,
             };
 
             var result = await _userManager.CreateAsync(user, dto.Password);
@@ -63,6 +68,7 @@ namespace OpenSpot.Auth
             await _userManager.AddToRoleAsync(user, "User");
             await SendVerificationEmailAsync(user);
 
+            _audit.Log("user.registered", user.Id, "User", user.Id);
             var response = await GenerateTokensAsync(user, token);
             return ServiceResult<TokenResponseDto?>.Created(response);
         }
@@ -76,6 +82,7 @@ namespace OpenSpot.Auth
             if (!user.EmailConfirmed)
                 return ServiceResult<TokenResponseDto?>.Fail("Please verify your email before logging in.", ResultStatus.ValidationError);
 
+            _audit.Log("auth.login", user.Id, "User", user.Id);
             var response = await GenerateTokensAsync(user, token);
             return ServiceResult<TokenResponseDto?>.Ok(response);
         }

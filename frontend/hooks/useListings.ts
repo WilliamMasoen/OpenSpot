@@ -12,13 +12,17 @@ export function useListings() {
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<string | undefined>(undefined);
+  const [maxPrice, setMaxPrice] = useState<number | undefined>(undefined);
+  const [userLat, setUserLat] = useState<number | undefined>(undefined);
+  const [userLng, setUserLng] = useState<number | undefined>(undefined);
 
-  const fetchPage = useCallback(async (pageNum: number, replace: boolean) => {
+  const fetchPage = useCallback(async (pageNum: number, replace: boolean, sort: string | undefined, price: number | undefined, lat: number | undefined, lng: number | undefined) => {
     if (pageNum === 1) setLoading(true);
     else setLoadingMore(true);
     setError(null);
     try {
-      const data = await listingService.getPage(pageNum, PAGE_SIZE);
+      const data = await listingService.getPage(pageNum, PAGE_SIZE, sort, price, lat, lng);
       setTotalCount(data.totalCount);
       setHasMore(data.hasMore);
       setPage(pageNum);
@@ -32,21 +36,31 @@ export function useListings() {
   }, []);
 
   useEffect(() => {
-    fetchPage(1, true);
-  }, [fetchPage]);
+    fetchPage(1, true, sortBy, maxPrice, userLat, userLng);
+  }, [fetchPage, sortBy, maxPrice, userLat, userLng]);
 
-  const refetch = useCallback(() => fetchPage(1, true), [fetchPage]);
+  const refetch = useCallback(() => fetchPage(1, true, sortBy, maxPrice, userLat, userLng), [fetchPage, sortBy, maxPrice, userLat, userLng]);
 
   const loadMore = useCallback(() => {
     if (!hasMore || loadingMore || loading) return;
-    fetchPage(page + 1, false);
-  }, [hasMore, loadingMore, loading, page, fetchPage]);
+    fetchPage(page + 1, false, sortBy, maxPrice, userLat, userLng);
+  }, [hasMore, loadingMore, loading, page, fetchPage, sortBy, maxPrice, userLat, userLng]);
 
   const updateListing = useCallback((id: string, updates: Partial<Listing>) => {
     setListings((prev) => prev.map((l) => l.id === id ? { ...l, ...updates } : l));
   }, []);
 
-  return { listings, totalCount, loading, loadingMore, hasMore, error, refetch, loadMore, updateListing };
+  const setFilters = useCallback((newSortBy: string | undefined, newMaxPrice: number | undefined) => {
+    setSortBy(newSortBy);
+    setMaxPrice(newMaxPrice);
+  }, []);
+
+  const setLocation = useCallback((lat: number | undefined, lng: number | undefined) => {
+    setUserLat(lat);
+    setUserLng(lng);
+  }, []);
+
+  return { listings, totalCount, loading, loadingMore, hasMore, error, refetch, loadMore, updateListing, sortBy, maxPrice, setFilters, userLat, userLng, setLocation };
 }
 
 export function useMyListings() {
