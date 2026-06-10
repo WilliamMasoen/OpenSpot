@@ -13,7 +13,7 @@ interface AuthState {
   setAuth: (tokenResponse: TokenResponse) => Promise<void>;
   clearAuth: () => Promise<void>;
   setLoading: (loading: boolean) => void;
-  updateUser: (updates: Pick<AuthUser, 'firstName' | 'lastName'>) => void;
+  updateUser: (updates: Partial<Pick<AuthUser, 'firstName' | 'lastName' | 'profileImageUrl'>>) => void;
   setHasSeenOnboarding: (seen: boolean) => void;
 }
 

@@ -1,9 +1,13 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using OpenSpot.Common;
+using OpenSpot.Data;
 using OpenSpot.Listings.DTOs;
 using OpenSpot.Listings.Interfaces;
+using OpenSpot.Sales.DTOs;
+using OpenSpot.Sales.Models;
 
 namespace OpenSpot.Listings.Controllers
 {
@@ -12,10 +16,12 @@ namespace OpenSpot.Listings.Controllers
     public class ListingsController : ControllerBase
     {
         private readonly IListingService _listingService;
+        private readonly ApplicationDbContext _db;
 
-        public ListingsController(IListingService listingService)
+        public ListingsController(IListingService listingService, ApplicationDbContext db)
         {
             _listingService = listingService;
+            _db = db;
         }
 
         [HttpGet]
@@ -181,6 +187,66 @@ namespace OpenSpot.Listings.Controllers
                 ResultStatus.Forbidden => StatusCode(403, result.Message),
                 _ => StatusCode(500, "Unexpected error.")
             };
+        }
+
+        [Authorize]
+        [HttpGet("{id:guid}/conversation-buyers")]
+        public async Task<IActionResult> GetConversationBuyers(Guid id, CancellationToken token)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+
+            var listing = await _db.Listing.FindAsync(new object[] { id }, token);
+            if (listing is null) return NotFound("Listing not found.");
+            if (listing.OwnerId != userId) return StatusCode(403, "You do not own this listing.");
+
+            var buyers = await _db.Conversations
+                .Where(c => c.ListingId == id)
+                .Select(c => new
+                {
+                    c.BuyerId,
+                    BuyerFirstName = c.Buyer.FirstName,
+                    BuyerLastName = c.Buyer.LastName,
+                    BuyerProfileImageUrl = c.Buyer.ProfileImageUrl,
+                })
+                .ToListAsync(token);
+
+            return Ok(buyers.Select(b => new
+            {
+                id = b.BuyerId,
+                name = $"{b.BuyerFirstName} {b.BuyerLastName}".Trim(),
+                profileImageUrl = b.BuyerProfileImageUrl,
+            }));
+        }
+
+        [Authorize]
+        [HttpPost("{id:guid}/sale")]
+        public async Task<IActionResult> CreateSale(Guid id, [FromBody] CreateSaleDto dto, CancellationToken token)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+
+            var listing = await _db.Listing.FindAsync(new object[] { id }, token);
+            if (listing is null) return NotFound("Listing not found.");
+            if (listing.OwnerId != userId) return StatusCode(403, "You do not own this listing.");
+            if (!listing.IsAvailable) return Conflict("Listing is already marked as rented.");
+
+            var buyerExists = await _db.Users.AnyAsync(u => u.Id == dto.BuyerId, token);
+            if (!buyerExists) return NotFound("Buyer not found.");
+
+            listing.IsAvailable = false;
+            var sale = new Sale
+            {
+                Id = Guid.NewGuid(),
+                ListingId = id,
+                SellerId = userId,
+                BuyerId = dto.BuyerId,
+                CreatedAt = DateTime.UtcNow,
+            };
+            _db.Sales.Add(sale);
+            await _db.SaveChangesAsync(token);
+
+            return StatusCode(201, new { saleId = sale.Id });
         }
 
         [Authorize]

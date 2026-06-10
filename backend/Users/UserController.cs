@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using OpenSpot.Data;
 using OpenSpot.Notifications;
+using OpenSpot.Listings.DTOs;
+using OpenSpot.Ratings.DTOs;
 using OpenSpot.Users.DTOs;
 using OpenSpot.Users.Models;
 using Microsoft.AspNetCore.Identity;
@@ -75,7 +77,8 @@ namespace OpenSpot.Users.Controllers
                 FirstName = user.FirstName,
                 LastName = user.LastName,
                 Email = user.Email ?? string.Empty,
-                PhoneNumber = user.PhoneNumber ?? string.Empty
+                PhoneNumber = user.PhoneNumber ?? string.Empty,
+                ProfileImageUrl = user.ProfileImageUrl,
             });
         }
 
@@ -140,7 +143,90 @@ namespace OpenSpot.Users.Controllers
                 FirstName = user.FirstName,
                 LastName = user.LastName,
                 Email = user.Email ?? string.Empty,
-                PhoneNumber = user.PhoneNumber ?? string.Empty
+                PhoneNumber = user.PhoneNumber ?? string.Empty,
+                ProfileImageUrl = user.ProfileImageUrl,
+            });
+        }
+
+        [HttpPost("me/photo")]
+        public async Task<IActionResult> UploadPhotoAsync(IFormFile file, CancellationToken token)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest("No file provided.");
+
+            var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+            string[] allowed = [".jpg", ".jpeg", ".png", ".webp", ".heic"];
+            if (!allowed.Contains(ext))
+                return BadRequest("Unsupported file type.");
+
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null) return NotFound();
+
+            var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "profiles", userId);
+            Directory.CreateDirectory(uploadsDir);
+
+            // Remove previous photo files
+            foreach (var old in Directory.GetFiles(uploadsDir))
+                System.IO.File.Delete(old);
+
+            var filename = $"{Guid.NewGuid()}{ext}";
+            var filePath = Path.Combine(uploadsDir, filename);
+            using (var stream = System.IO.File.Create(filePath))
+                await file.CopyToAsync(stream, token);
+
+            var url = $"{Request.Scheme}://{Request.Host}/uploads/profiles/{userId}/{filename}";
+            user.ProfileImageUrl = url;
+            await _userManager.UpdateAsync(user);
+
+            return Ok(new { url });
+        }
+
+        [HttpGet("{id}/profile")]
+        public async Task<IActionResult> GetUserProfileAsync(string id, CancellationToken token)
+        {
+            var user = await _userManager.FindByIdAsync(id);
+            if (user == null) return NotFound("User not found.");
+
+            var listings = await _db.Listing
+                .Include(l => l.Images)
+                .Include(l => l.Owner)
+                .Where(l => l.OwnerId == id)
+                .OrderByDescending(l => l.CreatedAt)
+                .ToListAsync(token);
+
+            var ratings = await _db.Ratings
+                .Include(r => r.Reviewer)
+                .Where(r => r.RevieweeId == id)
+                .OrderByDescending(r => r.CreatedAt)
+                .ToListAsync(token);
+
+            double? avgRating = ratings.Count > 0 ? ratings.Average(r => r.Stars) : null;
+
+            var recentRatings = ratings.Take(3).Select(r => new GetRatingDto
+            {
+                Id = r.Id,
+                SaleId = r.SaleId,
+                ReviewerId = r.ReviewerId,
+                ReviewerName = $"{r.Reviewer.FirstName} {r.Reviewer.LastName}".Trim(),
+                ReviewerProfileImageUrl = r.Reviewer.ProfileImageUrl,
+                Stars = r.Stars,
+                Comment = r.Comment,
+                CreatedAt = r.CreatedAt,
+            }).ToList();
+
+            return Ok(new UserProfileDto
+            {
+                Id = user.Id,
+                FirstName = user.FirstName,
+                LastName = user.LastName,
+                ProfileImageUrl = user.ProfileImageUrl,
+                AverageRating = avgRating,
+                TotalRatings = ratings.Count,
+                MemberSince = user.CreatedAt,
+                ListingCount = listings.Count,
+                RecentRatings = recentRatings,
+                Listings = listings.Select(l => new GetListingDto(l, null, avgRating, ratings.Count)).ToList(),
             });
         }
     }

@@ -11,7 +11,7 @@ function getBaseUrl(): string {
   return host ? `http://${host}:5137` : 'http://localhost:5137';
 }
 
-const BASE_URL = getBaseUrl();
+export const BASE_URL = getBaseUrl();
 
 let _refreshPromise: Promise<string | null> | null = null;
 

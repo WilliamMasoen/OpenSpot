@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Image, ActivityIndicator,
-  TouchableOpacity, Dimensions,
+  TouchableOpacity, Dimensions, Modal, FlatList,
 } from 'react-native';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,8 +9,12 @@ import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
 import { listingService } from '@/services/listingService';
 import { chatService } from '@/services/chatService';
+import { userService } from '@/services/userService';
 import { useAuthStore } from '@/store/authStore';
 import { Listing } from '@/types/listing';
+import { ConversationBuyer } from '@/types/user';
+import { AvatarImage } from '@/components/ui/AvatarImage';
+import { StarRating } from '@/components/ui/StarRating';
 import { theme } from '@/constants/theme';
 import { markListingsStale } from '@/utils/refreshFlags';
 
@@ -46,6 +50,54 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function BuyerPickerModal({
+  visible,
+  buyers,
+  onSelect,
+  onCancel,
+}: {
+  visible: boolean;
+  buyers: ConversationBuyer[];
+  onSelect: (buyer: ConversationBuyer) => void;
+  onCancel: () => void;
+}) {
+  return (
+    <Modal visible={visible} animationType="slide" transparent presentationStyle="overFullScreen">
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalSheet}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Who rented this spot?</Text>
+            <TouchableOpacity onPress={onCancel} hitSlop={8}>
+              <Ionicons name="close" size={22} color={theme.colors.text} />
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.modalSubtitle}>Select the buyer from conversations about this listing.</Text>
+
+          {buyers.length === 0 ? (
+            <View style={styles.modalEmpty}>
+              <Text style={styles.modalEmptyText}>No conversations yet — can't mark as rented.</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={buyers}
+              keyExtractor={(b) => b.id}
+              renderItem={({ item }) => (
+                <TouchableOpacity style={styles.buyerRow} onPress={() => onSelect(item)} activeOpacity={0.7}>
+                  <AvatarImage name={item.name} imageUrl={item.profileImageUrl} size={40} />
+                  <Text style={styles.buyerName}>{item.name}</Text>
+                  <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
+                </TouchableOpacity>
+              )}
+              ItemSeparatorComponent={() => <View style={styles.buyerDivider} />}
+              style={styles.buyerList}
+            />
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 export default function ListingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [listing, setListing] = useState<Listing | null>(null);
@@ -55,6 +107,9 @@ export default function ListingDetailScreen() {
   const [messageLoading, setMessageLoading] = useState(false);
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [showToast, setShowToast] = useState(false);
+  const [showBuyerPicker, setShowBuyerPicker] = useState(false);
+  const [buyers, setBuyers] = useState<ConversationBuyer[]>([]);
+  const [buyersLoading, setBuyersLoading] = useState(false);
   const user = useAuthStore((s) => s.user);
 
   const hasLoaded = useRef(false);
@@ -113,7 +168,7 @@ export default function ListingDetailScreen() {
     if (favoriteLoading) return;
     setFavoriteLoading(true);
     const prev = listing.isFavorited;
-    setListing((l) => l ? { ...l, isFavorited: !l.isFavorited } : l); // optimistic
+    setListing((l) => l ? { ...l, isFavorited: !l.isFavorited } : l);
     try {
       const result = await listingService.toggleFavorite(listing.id);
       setListing((l) => l ? { ...l, isFavorited: result.isFavorited } : l);
@@ -125,16 +180,44 @@ export default function ListingDetailScreen() {
     }
   };
 
-  const handleAvailabilityToggle = async () => {
-    if (availabilityLoading) return;
-    setAvailabilityLoading(true);
-    const prev = listing.isAvailable;
-    setListing((l) => l ? { ...l, isAvailable: !l.isAvailable } : l);
+  const handleMarkAsRented = async () => {
+    if (availabilityLoading || buyersLoading) return;
+    setBuyersLoading(true);
     try {
-      await listingService.setAvailability(listing.id, !prev);
+      const data = await userService.getConversationBuyers(listing.id);
+      setBuyers(data);
+      setShowBuyerPicker(true);
+    } catch {
+      setBuyers([]);
+      setShowBuyerPicker(true);
+    } finally {
+      setBuyersLoading(false);
+    }
+  };
+
+  const handleBuyerSelected = async (buyer: ConversationBuyer) => {
+    setShowBuyerPicker(false);
+    setAvailabilityLoading(true);
+    try {
+      await userService.createSale(listing.id, buyer.id);
+      setListing((l) => l ? { ...l, isAvailable: false } : l);
       markListingsStale();
     } catch {
-      setListing((l) => l ? { ...l, isAvailable: prev } : l);
+      // silently ignore — listing stays available
+    } finally {
+      setAvailabilityLoading(false);
+    }
+  };
+
+  const handleMarkAsAvailable = async () => {
+    if (availabilityLoading) return;
+    setAvailabilityLoading(true);
+    setListing((l) => l ? { ...l, isAvailable: true } : l);
+    try {
+      await listingService.setAvailability(listing.id, true);
+      markListingsStale();
+    } catch {
+      setListing((l) => l ? { ...l, isAvailable: false } : l);
     } finally {
       setAvailabilityLoading(false);
     }
@@ -142,6 +225,13 @@ export default function ListingDetailScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <BuyerPickerModal
+        visible={showBuyerPicker}
+        buyers={buyers}
+        onSelect={handleBuyerSelected}
+        onCancel={() => setShowBuyerPicker(false)}
+      />
+
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Image gallery */}
         {listing.imageUrls.length > 0 ? (
@@ -215,6 +305,34 @@ export default function ListingDetailScreen() {
             </View>
           </View>
 
+          {/* Owner info */}
+          {!isOwner && listing.ownerName ? (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Owner</Text>
+              <TouchableOpacity
+                style={styles.ownerCard}
+                onPress={() => router.push(`/user/${listing.ownerId}` as `${string}`)}
+                activeOpacity={0.8}
+              >
+                <AvatarImage name={listing.ownerName} imageUrl={listing.ownerProfileImageUrl} size={48} />
+                <View style={styles.ownerInfo}>
+                  <Text style={styles.ownerName}>{listing.ownerName}</Text>
+                  {listing.ownerTotalRatings > 0 ? (
+                    <View style={styles.ownerRatingRow}>
+                      <StarRating value={Math.round(listing.ownerAverageRating ?? 0)} size={13} />
+                      <Text style={styles.ownerRatingText}>
+                        {(listing.ownerAverageRating ?? 0).toFixed(1)} ({listing.ownerTotalRatings})
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.ownerNoRating}>No reviews yet</Text>
+                  )}
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
           {/* CTA */}
           {!isOwner && (
             <TouchableOpacity
@@ -235,7 +353,7 @@ export default function ListingDetailScreen() {
                     },
                   });
                 } catch {
-                  // silently ignore — user can retry
+                  // silently ignore
                 } finally {
                   setMessageLoading(false);
                 }
@@ -272,19 +390,36 @@ export default function ListingDetailScreen() {
                   <Text style={styles.mySpotsButtonText}>My Spots</Text>
                 </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                style={[styles.availabilityButton, listing.isAvailable ? styles.availabilityButtonRent : styles.availabilityButtonAvail]}
-                onPress={handleAvailabilityToggle}
-                disabled={availabilityLoading}
-              >
-                {availabilityLoading ? (
-                  <ActivityIndicator size="small" color={listing.isAvailable ? '#D97706' : '#16A34A'} />
-                ) : (
-                  <Text style={[styles.availabilityButtonText, listing.isAvailable ? styles.availabilityTextRent : styles.availabilityTextAvail]}>
-                    {listing.isAvailable ? 'Mark as Rented' : 'Mark as Available'}
-                  </Text>
-                )}
-              </TouchableOpacity>
+
+              {listing.isAvailable ? (
+                <TouchableOpacity
+                  style={[styles.availabilityButton, styles.availabilityButtonRent]}
+                  onPress={handleMarkAsRented}
+                  disabled={availabilityLoading || buyersLoading}
+                >
+                  {availabilityLoading || buyersLoading ? (
+                    <ActivityIndicator size="small" color="#D97706" />
+                  ) : (
+                    <Text style={[styles.availabilityButtonText, styles.availabilityTextRent]}>
+                      Mark as Rented
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.availabilityButton, styles.availabilityButtonAvail]}
+                  onPress={handleMarkAsAvailable}
+                  disabled={availabilityLoading}
+                >
+                  {availabilityLoading ? (
+                    <ActivityIndicator size="small" color="#16A34A" />
+                  ) : (
+                    <Text style={[styles.availabilityButtonText, styles.availabilityTextAvail]}>
+                      Mark as Available
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              )}
             </View>
           )}
         </View>
@@ -427,6 +562,37 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.border,
     marginHorizontal: theme.spacing.md,
   },
+  ownerCard: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+    ...theme.shadow.card,
+  },
+  ownerInfo: {
+    flex: 1,
+    gap: 4,
+  },
+  ownerName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.colors.text,
+  },
+  ownerRatingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  ownerRatingText: {
+    fontSize: 13,
+    color: theme.colors.textMuted,
+  },
+  ownerNoRating: {
+    fontSize: 13,
+    color: theme.colors.textMuted,
+  },
   ctaButton: {
     marginTop: theme.spacing.lg,
     height: 52,
@@ -539,5 +705,66 @@ const styles = StyleSheet.create({
   },
   availabilityTextAvail: {
     color: '#16A34A',
+  },
+  // Buyer picker modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: theme.colors.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 34,
+    maxHeight: '60%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: theme.spacing.md,
+    paddingBottom: theme.spacing.xs,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: theme.colors.text,
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    color: theme.colors.textMuted,
+    paddingHorizontal: theme.spacing.md,
+    paddingBottom: theme.spacing.sm,
+  },
+  modalEmpty: {
+    padding: theme.spacing.xl,
+    alignItems: 'center',
+  },
+  modalEmptyText: {
+    fontSize: 14,
+    color: theme.colors.textMuted,
+    textAlign: 'center',
+  },
+  buyerList: {
+    maxHeight: 320,
+  },
+  buyerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 14,
+  },
+  buyerName: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '500',
+    color: theme.colors.text,
+  },
+  buyerDivider: {
+    height: 1,
+    backgroundColor: theme.colors.border,
+    marginLeft: 72,
   },
 });

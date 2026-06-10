@@ -21,6 +21,10 @@ export interface Listing {
   longitude?: number | null;
   isFavorited?: boolean | null;
   imageUrls: string[];
+  ownerName: string;
+  ownerProfileImageUrl?: string | null;
+  ownerAverageRating?: number | null;
+  ownerTotalRatings: number;
 }
 
 export interface CreateListingRequest {

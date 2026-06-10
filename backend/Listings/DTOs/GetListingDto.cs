@@ -33,7 +33,15 @@ namespace OpenSpot.Listings.DTOs
 
         public List<string> ImageUrls { get; set; } = new();
 
-        public GetListingDto(Listing listing, bool? isFavorited = null)
+        public string OwnerName { get; set; } = string.Empty;
+
+        public string? OwnerProfileImageUrl { get; set; }
+
+        public double? OwnerAverageRating { get; set; }
+
+        public int OwnerTotalRatings { get; set; }
+
+        public GetListingDto(Listing listing, bool? isFavorited = null, double? ownerAverageRating = null, int ownerTotalRatings = 0)
         {
             Id = listing.Id;
             Title = listing.Title;
@@ -49,6 +57,13 @@ namespace OpenSpot.Listings.DTOs
             Longitude = listing.Longitude;
             IsFavorited = isFavorited;
             ImageUrls = listing.Images?.Select(i => i.Url).ToList() ?? new();
+            if (listing.Owner is not null)
+            {
+                OwnerName = $"{listing.Owner.FirstName} {listing.Owner.LastName}".Trim();
+                OwnerProfileImageUrl = listing.Owner.ProfileImageUrl;
+            }
+            OwnerAverageRating = ownerAverageRating;
+            OwnerTotalRatings = ownerTotalRatings;
         }
 
         GetListingDto() { }

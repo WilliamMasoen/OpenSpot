@@ -6,6 +6,7 @@ using OpenSpot.Listings.DTOs;
 using OpenSpot.Listings.Geocoding;
 using OpenSpot.Listings.Interfaces;
 using OpenSpot.Listings.Models;
+using OpenSpot.Ratings.Models;
 
 namespace OpenSpot.Listings.Services
 {
@@ -33,7 +34,7 @@ namespace OpenSpot.Listings.Services
 
             IQueryable<Listing> query;
             if (nearestSort)
-                query = baseQuery.Include(l => l.Images);
+                query = baseQuery.Include(l => l.Images).Include(l => l.Owner);
             else
                 query = sortBy switch
                 {
@@ -64,15 +65,22 @@ namespace OpenSpot.Listings.Services
                 totalCount = await query.CountAsync(token);
                 pagedListings = await query
                     .Include(l => l.Images)
+                    .Include(l => l.Owner)
                     .Skip((page - 1) * pageSize)
                     .Take(pageSize)
                     .ToListAsync(token);
             }
 
             var favoriteIds = await GetFavoriteIdsAsync(requesterId, token);
+            var ownerIds = pagedListings.Select(l => l.OwnerId).Distinct().ToList();
+            var ratingStats = await GetOwnerRatingStatsAsync(ownerIds, token);
             var result = new PagedResult<GetListingDto>
             {
-                Items = pagedListings.Select(l => new GetListingDto(l, favoriteIds?.Contains(l.Id))).ToList(),
+                Items = pagedListings.Select(l =>
+                {
+                    ratingStats.TryGetValue(l.OwnerId, out var stats);
+                    return new GetListingDto(l, favoriteIds?.Contains(l.Id), stats.avg, stats.count);
+                }).ToList(),
                 TotalCount = totalCount,
                 Page = page,
                 PageSize = pageSize,
@@ -86,6 +94,7 @@ namespace OpenSpot.Listings.Services
         {
             var listing = await _context.Listing
                 .Include(l => l.Images)
+                .Include(l => l.Owner)
                 .FirstOrDefaultAsync(l => l.Id == id, token);
             if (listing is null)
                 return ServiceResult<GetListingDto?>.Fail("Listing not found.", ResultStatus.NotFound);
@@ -95,17 +104,24 @@ namespace OpenSpot.Listings.Services
                 isFavorited = await _context.UserFavorites
                     .AnyAsync(f => f.UserId == requesterId && f.ListingId == id, token);
 
-            return ServiceResult<GetListingDto?>.Ok(new GetListingDto(listing, isFavorited));
+            var ratingStats = await GetOwnerRatingStatsAsync([listing.OwnerId], token);
+            ratingStats.TryGetValue(listing.OwnerId, out var stats);
+
+            return ServiceResult<GetListingDto?>.Ok(new GetListingDto(listing, isFavorited, stats.avg, stats.count));
         }
 
         public async Task<ServiceResult<List<GetListingDto>?>> GetMyListingsAsync(string ownerId, CancellationToken token)
         {
             var listings = await _context.Listing
                 .Include(l => l.Images)
+                .Include(l => l.Owner)
                 .Where(l => l.OwnerId == ownerId)
                 .OrderByDescending(l => l.CreatedAt)
                 .ToListAsync(token);
-            return ServiceResult<List<GetListingDto>?>.Ok(listings.Select(l => new GetListingDto(l)).ToList());
+            var ratingStats = await GetOwnerRatingStatsAsync([ownerId], token);
+            ratingStats.TryGetValue(ownerId, out var stats);
+            return ServiceResult<List<GetListingDto>?>.Ok(
+                listings.Select(l => new GetListingDto(l, null, stats.avg, stats.count)).ToList());
         }
 
         public async Task<ServiceResult<GetListingDto?>> CreateNewListingAsync(string ownerId, CreateListingDto dto, CancellationToken token)
@@ -203,7 +219,7 @@ namespace OpenSpot.Listings.Services
         public async Task<ServiceResult<List<GetListingDto>?>> SearchListingsAsync(
             string? q, double? lat, double? lng, double radiusKm, string? requesterId, CancellationToken token)
         {
-            var query = _context.Listing.Include(l => l.Images).Where(l => l.IsAvailable).AsQueryable();
+            var query = _context.Listing.Include(l => l.Images).Include(l => l.Owner).Where(l => l.IsAvailable).AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(q))
             {
@@ -224,8 +240,14 @@ namespace OpenSpot.Listings.Services
             }
 
             var favoriteIds = await GetFavoriteIdsAsync(requesterId, token);
+            var ownerIds = listings.Select(l => l.OwnerId).Distinct().ToList();
+            var ratingStats = await GetOwnerRatingStatsAsync(ownerIds, token);
             return ServiceResult<List<GetListingDto>?>.Ok(
-                listings.Select(l => new GetListingDto(l, favoriteIds?.Contains(l.Id))).ToList());
+                listings.Select(l =>
+                {
+                    ratingStats.TryGetValue(l.OwnerId, out var stats);
+                    return new GetListingDto(l, favoriteIds?.Contains(l.Id), stats.avg, stats.count);
+                }).ToList());
         }
 
         public async Task<ServiceResult<bool?>> ToggleFavoriteAsync(string userId, Guid listingId, CancellationToken token)
@@ -261,12 +283,19 @@ namespace OpenSpot.Listings.Services
             var listings = await _context.UserFavorites
                 .Where(f => f.UserId == userId)
                 .Include(f => f.Listing).ThenInclude(l => l.Images)
+                .Include(f => f.Listing).ThenInclude(l => l.Owner)
                 .Select(f => f.Listing)
                 .OrderByDescending(l => l.CreatedAt)
                 .ToListAsync(token);
 
+            var ownerIds = listings.Select(l => l.OwnerId).Distinct().ToList();
+            var ratingStats = await GetOwnerRatingStatsAsync(ownerIds, token);
             return ServiceResult<List<GetListingDto>?>.Ok(
-                listings.Select(l => new GetListingDto(l, true)).ToList());
+                listings.Select(l =>
+                {
+                    ratingStats.TryGetValue(l.OwnerId, out var stats);
+                    return new GetListingDto(l, true, stats.avg, stats.count);
+                }).ToList());
         }
 
         public async Task<ServiceResult<GetListingDto?>> SetAvailabilityAsync(Guid id, string requesterId, bool isAvailable, CancellationToken token)
@@ -281,6 +310,17 @@ namespace OpenSpot.Listings.Services
             _audit.Log("listing.availability_changed", requesterId, "Listing", id.ToString(), $"isAvailable={isAvailable}");
             await _context.SaveChangesAsync(token);
             return ServiceResult<GetListingDto?>.Ok(new GetListingDto(listing));
+        }
+
+        private async Task<Dictionary<string, (double? avg, int count)>> GetOwnerRatingStatsAsync(List<string> ownerIds, CancellationToken token)
+        {
+            if (ownerIds.Count == 0) return new();
+            var rows = await _context.Ratings
+                .Where(r => ownerIds.Contains(r.RevieweeId))
+                .GroupBy(r => r.RevieweeId)
+                .Select(g => new { OwnerId = g.Key, Avg = (double?)g.Average(r => r.Stars), Count = g.Count() })
+                .ToListAsync(token);
+            return rows.ToDictionary(r => r.OwnerId, r => (r.Avg, r.Count));
         }
 
         private async Task<HashSet<Guid>?> GetFavoriteIdsAsync(string? userId, CancellationToken token)

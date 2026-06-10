@@ -19,6 +19,8 @@ using OpenSpot.Email;
 using OpenSpot.Listings.Geocoding;
 using OpenSpot.Listings.Interfaces;
 using OpenSpot.Listings.Services;
+using OpenSpot.Ratings.Interfaces;
+using OpenSpot.Ratings.Services;
 using OpenSpot.Users.Models;
 using Serilog;
 
@@ -117,6 +119,7 @@ builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IListingService, ListingService>();
 builder.Services.AddScoped<IConversationService, ConversationService>();
 builder.Services.AddScoped<IPushNotificationService, PushNotificationService>();
+builder.Services.AddScoped<IRatingService, RatingService>();
 builder.Services.AddHttpClient<IGeocodingService, NominatimGeocodingService>(client =>
 {
     client.DefaultRequestHeaders.Add("User-Agent", "OpenSpot/1.0 (openspot-app)");

@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/hooks/useAuth';
+import { AvatarImage } from '@/components/ui/AvatarImage';
 import { theme } from '@/constants/theme';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -42,11 +43,6 @@ export default function ProfileScreen() {
 
   if (!user) return null;
 
-  const initials = [user.firstName, user.lastName]
-    .filter(Boolean)
-    .map((n) => n[0].toUpperCase())
-    .join('') || user.email[0].toUpperCase();
-
   const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ') || 'User';
 
   const handleLogout = () => {
@@ -64,9 +60,7 @@ export default function ProfileScreen() {
       >
         {/* Avatar + identity */}
         <View style={styles.hero}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initials}</Text>
-          </View>
+          <AvatarImage name={fullName} imageUrl={user.profileImageUrl} size={88} />
           <Text style={styles.name}>{fullName}</Text>
           <Text style={styles.email}>{user.email}</Text>
         </View>
@@ -89,6 +83,15 @@ export default function ProfileScreen() {
             icon="heart-outline"
             label="My Favourites"
             onPress={() => router.push('/favorites')}
+          />
+        </View>
+
+        {/* Support */}
+        <View style={styles.card}>
+          <NavRow
+            icon="help-circle-outline"
+            label="Support"
+            onPress={() => router.push('/support')}
           />
         </View>
 
@@ -120,20 +123,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: theme.spacing.lg,
     gap: theme.spacing.sm,
-  },
-  avatar: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: theme.colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: theme.spacing.xs,
-  },
-  avatarText: {
-    fontSize: 34,
-    fontWeight: '700',
-    color: theme.colors.primary,
   },
   name: {
     fontSize: 22,

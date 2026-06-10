@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Alert,
+  ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { userService } from '@/services/userService';
 import { useAuthStore } from '@/store/authStore';
+import { AvatarImage } from '@/components/ui/AvatarImage';
 import { theme } from '@/constants/theme';
 
 function Field({
@@ -49,6 +51,8 @@ export default function EditProfileScreen() {
   const [firstName, setFirstName] = useState(user?.firstName ?? '');
   const [lastName, setLastName] = useState(user?.lastName ?? '');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [profileImageUrl, setProfileImageUrl] = useState<string | null | undefined>(user?.profileImageUrl);
+  const [photoUploading, setPhotoUploading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,10 +63,38 @@ export default function EditProfileScreen() {
         setFirstName(profile.firstName);
         setLastName(profile.lastName);
         setPhoneNumber(profile.phoneNumber);
+        setProfileImageUrl(profile.profileImageUrl);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  const fullName = [firstName, lastName].filter(Boolean).join(' ') || 'User';
+
+  const handlePickPhoto = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') return;
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (result.canceled || !result.assets[0]) return;
+
+    setPhotoUploading(true);
+    try {
+      const { url } = await userService.uploadPhoto(result.assets[0].uri);
+      setProfileImageUrl(url);
+      updateUser({ profileImageUrl: url });
+    } catch {
+      setError('Failed to upload photo.');
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!firstName.trim()) {
@@ -110,6 +142,17 @@ export default function EditProfileScreen() {
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
+            {/* Photo picker */}
+            <TouchableOpacity style={styles.avatarWrap} onPress={handlePickPhoto} disabled={photoUploading}>
+              <AvatarImage name={fullName} imageUrl={profileImageUrl} size={88} />
+              <View style={styles.cameraIcon}>
+                {photoUploading
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <Ionicons name="camera" size={16} color="#fff" />
+                }
+              </View>
+            </TouchableOpacity>
+
             <Field
               label="First Name"
               value={firstName}
@@ -186,6 +229,23 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  avatarWrap: {
+    alignSelf: 'center',
+    marginBottom: theme.spacing.sm,
+  },
+  cameraIcon: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: theme.colors.background,
   },
   form: {
     padding: theme.spacing.lg,

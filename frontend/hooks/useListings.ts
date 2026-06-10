@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { listingService } from '@/services/listingService';
-import { Listing, CreateListingRequest } from '@/types/listing';
+import { Listing, CreateListingRequest, UpdateListingRequest } from '@/types/listing';
 
 const PAGE_SIZE = 20;
 

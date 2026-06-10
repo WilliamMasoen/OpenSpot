@@ -5,7 +5,9 @@ using OpenSpot.Chat.Models;
 using OpenSpot.Data.Interfaces;
 using OpenSpot.Listings.Models;
 using OpenSpot.Notifications;
+using OpenSpot.Ratings.Models;
 using OpenSpot.RefreshTokens;
+using OpenSpot.Sales.Models;
 using OpenSpot.Users.Models;
 
 namespace OpenSpot.Data
@@ -26,6 +28,8 @@ namespace OpenSpot.Data
         public DbSet<Message> Messages { get; set; }
         public DbSet<AuditLog> AuditLogs { get; set; }
         public DbSet<PushToken> PushTokens { get; set; }
+        public DbSet<Sale> Sales { get; set; }
+        public DbSet<Rating> Ratings { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -33,6 +37,7 @@ namespace OpenSpot.Data
             modelBuilder.ApplyConfigurationsFromAssembly(typeof(ApplicationDbContext).Assembly);
             modelBuilder.Entity<UserFavorite>().HasKey(f => new { f.UserId, f.ListingId });
             modelBuilder.Entity<PushToken>().HasIndex(p => p.Token).IsUnique();
+            modelBuilder.Entity<Rating>().HasIndex(r => new { r.SaleId, r.ReviewerId }).IsUnique();
             modelBuilder.Entity<Conversation>()
                 .HasIndex(c => new { c.ListingId, c.BuyerId })
                 .IsUnique();
