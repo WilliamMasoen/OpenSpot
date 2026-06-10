@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useMessages } from '@/hooks/useMessages';
 import { useAuthStore } from '@/store/authStore';
+import { AvatarImage } from '@/components/ui/AvatarImage';
 import { theme } from '@/constants/theme';
 import { ChatMessage } from '@/types/chat';
 
@@ -15,31 +16,30 @@ function formatMsgTime(isoStr: string): string {
   return new Date(isoStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function OtherAvatar({ name }: { name: string }) {
-  const initials = name
-    .split(' ')
-    .slice(0, 2)
-    .map((n) => n[0]?.toUpperCase() ?? '')
-    .join('') || '?';
-  return (
-    <View style={styles.otherAvatar}>
-      <Text style={styles.otherAvatarText}>{initials}</Text>
-    </View>
-  );
-}
-
 function MessageBubble({
   msg,
   isMe,
   otherName,
+  otherProfileImageUrl,
+  otherUserId,
 }: {
   msg: ChatMessage;
   isMe: boolean;
   otherName: string;
+  otherProfileImageUrl?: string | null;
+  otherUserId?: string;
 }) {
   return (
     <View style={[styles.bubbleRow, isMe && styles.bubbleRowMe]}>
-      {!isMe && <OtherAvatar name={otherName} />}
+      {!isMe && (
+        <TouchableOpacity
+          onPress={() => otherUserId && router.push(`/user/${otherUserId}` as `${string}`)}
+          disabled={!otherUserId}
+          activeOpacity={0.7}
+        >
+          <AvatarImage name={otherName} imageUrl={otherProfileImageUrl} size={28} />
+        </TouchableOpacity>
+      )}
       <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem]}>
         <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>{msg.body}</Text>
         <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMe]}>
@@ -82,12 +82,14 @@ function ListingHeader({
 }
 
 export default function ConversationScreen() {
-  const { id, title, subtitle, listingId, listingImageUrl } = useLocalSearchParams<{
+  const { id, title, subtitle, listingId, listingImageUrl, otherUserId, otherUserProfileImageUrl } = useLocalSearchParams<{
     id: string;
     title?: string;
     subtitle?: string;
     listingId?: string;
     listingImageUrl?: string;
+    otherUserId?: string;
+    otherUserProfileImageUrl?: string;
   }>();
   const { messages, loading, error, sending, sendError, sendMessage } = useMessages(id);
   const userId = useAuthStore((s) => s.user?.userId);
@@ -153,6 +155,8 @@ export default function ConversationScreen() {
                 msg={item}
                 isMe={item.senderId === userId}
                 otherName={otherName}
+                otherProfileImageUrl={otherUserProfileImageUrl}
+                otherUserId={otherUserId}
               />
             )}
             contentContainerStyle={styles.messageList}
@@ -302,21 +306,6 @@ const styles = StyleSheet.create({
   },
   bubbleRowMe: {
     justifyContent: 'flex-end',
-  },
-  otherAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: theme.colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    marginBottom: 2,
-  },
-  otherAvatarText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: theme.colors.primary,
   },
   bubble: {
     maxWidth: '72%',

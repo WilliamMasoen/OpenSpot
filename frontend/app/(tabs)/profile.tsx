@@ -1,10 +1,15 @@
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/hooks/useAuth';
+import { useAuthStore } from '@/store/authStore';
+import { userService } from '@/services/userService';
 import { AvatarImage } from '@/components/ui/AvatarImage';
+import { StarRating } from '@/components/ui/StarRating';
 import { theme } from '@/constants/theme';
+import { UserProfile } from '@/types/user';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -40,6 +45,13 @@ function NavRow({
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
+  const userId = useAuthStore((s) => s.user?.userId);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    if (!userId) return;
+    userService.getProfile(userId).then(setProfile).catch(() => {});
+  }, [userId]);
 
   if (!user) return null;
 
@@ -63,13 +75,27 @@ export default function ProfileScreen() {
           <AvatarImage name={fullName} imageUrl={user.profileImageUrl} size={88} />
           <Text style={styles.name}>{fullName}</Text>
           <Text style={styles.email}>{user.email}</Text>
+
+          {profile && profile.totalRatings > 0 && (
+            <TouchableOpacity
+              style={styles.ratingRow}
+              onPress={() => router.push(`/ratings/${userId}` as `${string}`)}
+              activeOpacity={0.7}
+            >
+              <StarRating value={Math.round(profile.averageRating ?? 0)} size={16} />
+              <Text style={styles.ratingText}>
+                {(profile.averageRating ?? 0).toFixed(1)}
+                <Text style={styles.ratingCount}> ({profile.totalRatings} {profile.totalRatings === 1 ? 'review' : 'reviews'})</Text>
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Navigation rows */}
         <View style={styles.card}>
           <NavRow
             icon="person-outline"
-            label="Edit Profile"
+            label="My Profile"
             onPress={() => router.push('/edit-profile')}
           />
           <View style={styles.divider} />
@@ -84,6 +110,16 @@ export default function ProfileScreen() {
             label="My Favourites"
             onPress={() => router.push('/favorites')}
           />
+          {profile && profile.totalRatings > 0 && (
+            <>
+              <View style={styles.divider} />
+              <NavRow
+                icon="star-outline"
+                label="My Reviews"
+                onPress={() => router.push(`/ratings/${userId}` as `${string}`)}
+              />
+            </>
+          )}
         </View>
 
         {/* Support */}
@@ -132,6 +168,21 @@ const styles = StyleSheet.create({
   },
   email: {
     fontSize: 14,
+    color: theme.colors.textMuted,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    marginTop: 2,
+  },
+  ratingText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.text,
+  },
+  ratingCount: {
+    fontWeight: '400',
     color: theme.colors.textMuted,
   },
   card: {

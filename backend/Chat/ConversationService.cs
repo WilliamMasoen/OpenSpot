@@ -86,9 +86,11 @@ namespace OpenSpot.Chat.Services
                     c.BuyerId,
                     BuyerFirstName = c.Buyer.FirstName,
                     BuyerLastName = c.Buyer.LastName,
+                    BuyerProfileImageUrl = c.Buyer.ProfileImageUrl,
                     c.OwnerId,
                     OwnerFirstName = c.Owner.FirstName,
                     OwnerLastName = c.Owner.LastName,
+                    OwnerProfileImageUrl = c.Owner.ProfileImageUrl,
                     c.CreatedAt,
                     ListingImageUrl = c.Listing.Images.Select(i => i.Url).FirstOrDefault(),
                     LastMessage = c.Messages
@@ -117,6 +119,7 @@ namespace OpenSpot.Chat.Services
                 var otherUserName = (isOwner
                     ? $"{r.BuyerFirstName} {r.BuyerLastName}"
                     : $"{r.OwnerFirstName} {r.OwnerLastName}").Trim();
+                var otherUserProfileImageUrl = isOwner ? r.BuyerProfileImageUrl : r.OwnerProfileImageUrl;
 
                 GetMessageDto? lastMsg = null;
                 if (r.LastMessage is not null)
@@ -130,7 +133,7 @@ namespace OpenSpot.Chat.Services
 
                 return new GetConversationDto(
                     r.Id, r.ListingId, r.ListingTitle, r.ListingImageUrl,
-                    otherUserId, otherUserName, r.CreatedAt, lastMsg, r.UnreadCount);
+                    otherUserId, otherUserName, otherUserProfileImageUrl, r.CreatedAt, lastMsg, r.UnreadCount);
             }).ToList();
 
             return ServiceResult<List<GetConversationDto>>.Ok(dtos);
@@ -250,9 +253,11 @@ namespace OpenSpot.Chat.Services
                     c.BuyerId,
                     BuyerFirstName = c.Buyer.FirstName,
                     BuyerLastName = c.Buyer.LastName,
+                    BuyerProfileImageUrl = c.Buyer.ProfileImageUrl,
                     c.OwnerId,
                     OwnerFirstName = c.Owner.FirstName,
                     OwnerLastName = c.Owner.LastName,
+                    OwnerProfileImageUrl = c.Owner.ProfileImageUrl,
                     c.CreatedAt,
                     ListingImageUrl = c.Listing.Images.Select(i => i.Url).FirstOrDefault(),
                     LastMessage = c.Messages
@@ -274,6 +279,7 @@ namespace OpenSpot.Chat.Services
             var otherUserName = (isOwner
                 ? $"{row.BuyerFirstName} {row.BuyerLastName}"
                 : $"{row.OwnerFirstName} {row.OwnerLastName}").Trim();
+            var otherUserProfileImageUrl = isOwner ? row.BuyerProfileImageUrl : row.OwnerProfileImageUrl;
 
             GetMessageDto? lastMsg = null;
             if (row.LastMessage is not null)
@@ -287,7 +293,7 @@ namespace OpenSpot.Chat.Services
 
             return new GetConversationDto(
                 row.Id, row.ListingId, row.ListingTitle, row.ListingImageUrl,
-                otherUserId, otherUserName, row.CreatedAt, lastMsg, row.UnreadCount);
+                otherUserId, otherUserName, otherUserProfileImageUrl, row.CreatedAt, lastMsg, row.UnreadCount);
         }
     }
 }

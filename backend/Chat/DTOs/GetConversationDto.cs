@@ -7,6 +7,7 @@ namespace OpenSpot.Chat.DTOs
         string? ListingImageUrl,
         string OtherUserId,
         string OtherUserName,
+        string? OtherUserProfileImageUrl,
         DateTime CreatedAt,
         GetMessageDto? LastMessage,
         int UnreadCount);

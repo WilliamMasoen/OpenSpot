@@ -15,6 +15,7 @@ export interface Conversation {
   listingImageUrl: string | null;
   otherUserId: string;
   otherUserName: string;
+  otherUserProfileImageUrl: string | null;
   createdAt: string;
   lastMessage: ChatMessage | null;
   unreadCount: number;

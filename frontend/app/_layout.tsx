@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Platform, AppState, Modal, View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { Platform, AppState, Modal, View, Text, TextInput, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useAuthStore, REFRESH_TOKEN_KEY } from '@/store/authStore';
 import { authService } from '@/services/authService';
@@ -87,6 +87,7 @@ function PendingRatingModal({
   onDone: () => void;
 }) {
   const [stars, setStars] = useState(0);
+  const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -98,7 +99,7 @@ function PendingRatingModal({
     setSubmitting(true);
     setError(null);
     try {
-      await ratingService.create(pending.saleId, stars);
+      await ratingService.create(pending.saleId, stars, comment.trim() || undefined);
       onDone();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to submit rating.');
@@ -124,6 +125,17 @@ function PendingRatingModal({
 
           <StarRating value={stars} onChange={setStars} size={36} />
 
+          <TextInput
+            style={ratingStyles.commentInput}
+            placeholder="Leave a comment (optional)"
+            placeholderTextColor={theme.colors.textMuted}
+            value={comment}
+            onChangeText={setComment}
+            multiline
+            maxLength={500}
+            textAlignVertical="top"
+          />
+
           {error ? <Text style={ratingStyles.error}>{error}</Text> : null}
 
           <TouchableOpacity
@@ -148,7 +160,7 @@ function PendingRatingModal({
 }
 
 export default function RootLayout() {
-  const { setAuth, clearAuth, setLoading, setHasSeenOnboarding, isAuthenticated } = useAuthStore();
+  const { setAuth, clearAuth, setLoading, setHasSeenOnboarding, updateUser, isAuthenticated } = useAuthStore();
   const pushTokenRef = useRef<string | null>(null);
   const [pendingRatings, setPendingRatings] = useState<PendingRating[]>([]);
 
@@ -163,6 +175,8 @@ export default function RootLayout() {
         if (refreshToken) {
           const tokenResponse = await authService.refresh(refreshToken);
           await setAuth(tokenResponse);
+          const me = await userService.getMe();
+          if (me.profileImageUrl) updateUser({ profileImageUrl: me.profileImageUrl });
         }
       } catch {
         await clearAuth();
@@ -289,6 +303,18 @@ const ratingStyles = StyleSheet.create({
   revieweeName: {
     fontSize: 16,
     fontWeight: '600',
+    color: theme.colors.text,
+  },
+  commentInput: {
+    width: '100%',
+    minHeight: 80,
+    backgroundColor: theme.colors.background,
+    borderRadius: theme.radius.md,
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    fontSize: 14,
     color: theme.colors.text,
   },
   error: {

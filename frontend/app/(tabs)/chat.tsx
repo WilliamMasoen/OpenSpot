@@ -100,6 +100,8 @@ export default function ChatScreen() {
                   subtitle: item.listingTitle,
                   listingId: item.listingId,
                   listingImageUrl: item.listingImageUrl ?? '',
+                  otherUserId: item.otherUserId,
+                  otherUserProfileImageUrl: item.otherUserProfileImageUrl ?? '',
                 },
               })
             }

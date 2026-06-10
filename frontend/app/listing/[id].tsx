@@ -350,6 +350,8 @@ export default function ListingDetailScreen() {
                       subtitle: listing.title,
                       listingId: listing.id,
                       listingImageUrl: listing.imageUrls[0] ?? '',
+                      otherUserId: conv.otherUserId,
+                      otherUserProfileImageUrl: listing.ownerProfileImageUrl ?? '',
                     },
                   });
                 } catch {
