@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { View, Text, Image, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { router } from 'expo-router';
+import { navigate } from '@/utils/navigate';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useConversations } from '@/hooks/useConversations';
@@ -93,7 +94,7 @@ export default function ChatScreen() {
           <ConversationRow
             item={item}
             onPress={() =>
-              router.push({
+              navigate({
                 pathname: `/conversation/${item.id}` as `${string}`,
                 params: {
                   title: item.otherUserName,

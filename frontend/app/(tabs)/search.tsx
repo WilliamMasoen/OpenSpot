@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { navigate } from '@/utils/navigate';
 import * as Location from 'expo-location';
 import { ListingCard } from '@/components/ui/ListingCard';
 import { useSearch } from '@/hooks/useSearch';
@@ -140,7 +141,7 @@ export default function SearchScreen() {
                 variant="tile"
                 isFavorited={getFavorited(item.id)}
                 onFavoritePress={() => toggle(item.id)}
-                onPress={() => router.push(`/listing/${item.id}`)}
+                onPress={() => navigate(`/listing/${item.id}`)}
               />
             )}
             contentContainerStyle={styles.list}

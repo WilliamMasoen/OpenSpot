@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
+import { navigate } from '@/utils/navigate';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/hooks/useAuth';
@@ -79,7 +80,7 @@ export default function ProfileScreen() {
           {profile && profile.totalRatings > 0 && (
             <TouchableOpacity
               style={styles.ratingRow}
-              onPress={() => router.push(`/ratings/${userId}` as `${string}`)}
+              onPress={() => navigate(`/ratings/${userId}` as `${string}`)}
               activeOpacity={0.7}
             >
               <StarRating value={Math.round(profile.averageRating ?? 0)} size={16} />
@@ -96,19 +97,19 @@ export default function ProfileScreen() {
           <NavRow
             icon="person-outline"
             label="My Profile"
-            onPress={() => router.push('/edit-profile')}
+            onPress={() => navigate('/edit-profile')}
           />
           <View style={styles.divider} />
           <NavRow
             icon="car-outline"
             label="My Spots"
-            onPress={() => router.push('/my-listings')}
+            onPress={() => navigate('/my-listings')}
           />
           <View style={styles.divider} />
           <NavRow
             icon="heart-outline"
             label="My Favourites"
-            onPress={() => router.push('/favorites')}
+            onPress={() => navigate('/favorites')}
           />
           {profile && profile.totalRatings > 0 && (
             <>
@@ -116,7 +117,7 @@ export default function ProfileScreen() {
               <NavRow
                 icon="star-outline"
                 label="My Reviews"
-                onPress={() => router.push(`/ratings/${userId}` as `${string}`)}
+                onPress={() => navigate(`/ratings/${userId}` as `${string}`)}
               />
             </>
           )}
@@ -127,7 +128,7 @@ export default function ProfileScreen() {
           <NavRow
             icon="help-circle-outline"
             label="Support"
-            onPress={() => router.push('/support')}
+            onPress={() => navigate('/support')}
           />
         </View>
 

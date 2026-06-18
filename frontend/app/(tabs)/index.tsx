@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { View, Text, FlatList, StyleSheet, ActivityIndicator, RefreshControl, ScrollView, TouchableOpacity } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
+import { navigate } from '@/utils/navigate';
 import * as Location from 'expo-location';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { ListingCard } from '@/components/ui/ListingCard';
@@ -165,7 +166,7 @@ export default function HomeScreen() {
             variant="tile"
             isFavorited={getFavorited(item.id)}
             onFavoritePress={() => toggle(item.id)}
-            onPress={() => router.push(`/listing/${item.id}`)}
+            onPress={() => navigate(`/listing/${item.id}`)}
           />
         )}
         contentContainerStyle={styles.list}

@@ -24,6 +24,18 @@ Notifications.setNotificationHandler({
 });
 
 const ONBOARDING_KEY = 'hasSeenOnboarding';
+const SKIPPED_RATINGS_KEY = 'skippedRatings';
+
+async function getSkippedIds(): Promise<Set<string>> {
+  const raw = await SecureStore.getItemAsync(SKIPPED_RATINGS_KEY).catch(() => null);
+  return new Set(raw ? JSON.parse(raw) : []);
+}
+
+async function addSkippedId(saleId: string): Promise<void> {
+  const skipped = await getSkippedIds();
+  skipped.add(saleId);
+  await SecureStore.setItemAsync(SKIPPED_RATINGS_KEY, JSON.stringify([...skipped]));
+}
 
 function AuthGuard() {
   const { isAuthenticated, isLoading, hasSeenOnboarding } = useAuthStore();
@@ -82,9 +94,11 @@ async function registerPushToken(): Promise<string | null> {
 function PendingRatingModal({
   pending,
   onDone,
+  onSkip,
 }: {
   pending: PendingRating;
   onDone: () => void;
+  onSkip: () => void;
 }) {
   const [stars, setStars] = useState(0);
   const [comment, setComment] = useState('');
@@ -150,7 +164,7 @@ function PendingRatingModal({
             }
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={onDone} style={ratingStyles.skipBtn}>
+          <TouchableOpacity onPress={onSkip} style={ratingStyles.skipBtn}>
             <Text style={ratingStyles.skipText}>Skip for now</Text>
           </TouchableOpacity>
         </View>
@@ -201,10 +215,15 @@ export default function RootLayout() {
         .then((token) => { if (token) pushTokenRef.current = token; })
         .catch(() => {});
 
-      const checkPending = () => {
-        ratingService.getPending()
-          .then((data) => { if (data.length > 0) setPendingRatings(data); })
-          .catch(() => {});
+      const checkPending = async () => {
+        try {
+          const [data, skipped] = await Promise.all([
+            ratingService.getPending(),
+            getSkippedIds(),
+          ]);
+          const filtered = data.filter((r) => !skipped.has(r.saleId));
+          if (filtered.length > 0) setPendingRatings(filtered);
+        } catch {}
       };
 
       checkPending();
@@ -248,6 +267,10 @@ export default function RootLayout() {
         <PendingRatingModal
           pending={currentPending}
           onDone={() => setPendingRatings((prev) => prev.slice(1))}
+          onSkip={() => {
+            addSkippedId(currentPending.saleId).catch(() => {});
+            setPendingRatings((prev) => prev.slice(1));
+          }}
         />
       )}
       <Stack screenOptions={{ headerShown: false }}>

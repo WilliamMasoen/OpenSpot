@@ -4,6 +4,7 @@ import {
   TouchableOpacity, Dimensions, Modal, FlatList, Animated, Easing, Pressable,
 } from 'react-native';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
+import { navigate } from '@/utils/navigate';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
@@ -340,7 +341,7 @@ export default function ListingDetailScreen() {
               <Text style={styles.sectionTitle}>Owner</Text>
               <TouchableOpacity
                 style={styles.ownerCard}
-                onPress={() => router.push(`/user/${listing.ownerId}` as `${string}`)}
+                onPress={() => navigate(`/user/${listing.ownerId}` as `${string}`)}
                 activeOpacity={0.8}
               >
                 <AvatarImage name={listing.ownerName} imageUrl={listing.ownerProfileImageUrl} size={48} />
@@ -372,7 +373,7 @@ export default function ListingDetailScreen() {
                 setMessageLoading(true);
                 try {
                   const conv = await chatService.getOrCreateConversation(listing.id);
-                  router.push({
+                  navigate({
                     pathname: `/conversation/${conv.id}` as `${string}`,
                     params: {
                       title: conv.otherUserName,
@@ -409,14 +410,14 @@ export default function ListingDetailScreen() {
               <View style={styles.ownerActionsRow}>
                 <TouchableOpacity
                   style={styles.editButton}
-                  onPress={() => router.push(`/edit-listing/${listing.id}` as `${string}`)}
+                  onPress={() => navigate(`/edit-listing/${listing.id}` as `${string}`)}
                 >
                   <Ionicons name="pencil-outline" size={16} color={theme.colors.primary} />
                   <Text style={styles.editButtonText}>Edit Listing</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.mySpotsButton}
-                  onPress={() => router.push('/my-listings')}
+                  onPress={() => navigate('/my-listings')}
                 >
                   <Text style={styles.mySpotsButtonText}>My Spots</Text>
                 </TouchableOpacity>

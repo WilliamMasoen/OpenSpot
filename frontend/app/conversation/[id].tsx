@@ -4,6 +4,7 @@ import {
   KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
+import { navigate } from '@/utils/navigate';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useMessages } from '@/hooks/useMessages';
@@ -33,7 +34,7 @@ function MessageBubble({
     <View style={[styles.bubbleRow, isMe && styles.bubbleRowMe]}>
       {!isMe && (
         <TouchableOpacity
-          onPress={() => otherUserId && router.push(`/user/${otherUserId}` as `${string}`)}
+          onPress={() => otherUserId && navigate(`/user/${otherUserId}` as `${string}`)}
           disabled={!otherUserId}
           activeOpacity={0.7}
         >
@@ -63,7 +64,7 @@ function ListingHeader({
     <TouchableOpacity
       style={styles.listingHeader}
       activeOpacity={0.8}
-      onPress={() => router.push(`/listing/${listingId}` as `${string}`)}
+      onPress={() => navigate(`/listing/${listingId}` as `${string}`)}
     >
       {imageUrl ? (
         <Image source={{ uri: imageUrl }} style={styles.listingImage} resizeMode="cover" />
