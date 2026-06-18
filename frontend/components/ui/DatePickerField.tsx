@@ -1,124 +1,24 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, Modal, StyleSheet, Platform,
-  Pressable, Keyboard, Animated, Easing, ScrollView,
-  NativeSyntheticEvent, NativeScrollEvent,
+  Pressable, Keyboard, Animated, Easing,
 } from 'react-native';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/constants/theme';
 
-const ITEM_H = 48;
-const VISIBLE = 5;
-const CENTER = Math.floor(VISIBLE / 2);
-const SHEET_TRANSLATE = 380;
-
+const SHEET_TRANSLATE = 560;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const THIS_YEAR = new Date().getFullYear();
-const YEARS = Array.from({ length: 10 }, (_, i) => THIS_YEAR + i);
-
-function daysInMonth(month: number, year: number) {
-  return new Date(year, month + 1, 0).getDate();
-}
 
 function pad(n: number) { return String(n).padStart(2, '0'); }
 function toLocalDate(s: string) { return new Date(`${s}T00:00:00`); }
-
+function dateToStr(d: Date) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
 function formatDisplay(s: string) {
   const [y, m, d] = s.split('-').map(Number);
   return `${MONTHS[m - 1]} ${d}, ${y}`;
 }
 
-function buildDateStr(monthIdx: number, dayIdx: number, year: number) {
-  return `${year}-${pad(monthIdx + 1)}-${pad(dayIdx + 1)}`;
-}
-
-// ── WheelColumn ───────────────────────────────────────────────────────────────
-interface WheelProps {
-  items: string[];
-  selectedIndex: number;
-  onChange: (i: number) => void;
-  flex?: number;
-}
-
-function WheelColumn({ items, selectedIndex, onChange, flex = 1 }: WheelProps) {
-  const ref = useRef<ScrollView>(null);
-
-  useEffect(() => {
-    ref.current?.scrollTo({ y: selectedIndex * ITEM_H, animated: false });
-  }, [selectedIndex, items]);
-
-  const snap = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const raw = e.nativeEvent.contentOffset.y;
-    const idx = Math.max(0, Math.min(Math.round(raw / ITEM_H), items.length - 1));
-    ref.current?.scrollTo({ y: idx * ITEM_H, animated: false });
-    onChange(idx);
-  };
-
-  return (
-    <View style={[wheel.wrapper, { flex }]}>
-      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-        <View style={[wheel.line, { top: CENTER * ITEM_H }]} />
-        <View style={[wheel.line, { top: (CENTER + 1) * ITEM_H }]} />
-      </View>
-
-      <ScrollView
-        ref={ref}
-        style={wheel.scroll}
-        showsVerticalScrollIndicator={false}
-        snapToInterval={ITEM_H}
-        decelerationRate="fast"
-        contentContainerStyle={{ paddingVertical: CENTER * ITEM_H }}
-        onMomentumScrollEnd={snap}
-        onScrollEndDrag={snap}
-      >
-        {items.map((item, i) => (
-          <View key={i} style={wheel.item}>
-            <Text style={[wheel.text, i === selectedIndex && wheel.textSelected]}>
-              {item}
-            </Text>
-          </View>
-        ))}
-      </ScrollView>
-    </View>
-  );
-}
-
-const wheel = StyleSheet.create({
-  wrapper: {
-    height: ITEM_H * VISIBLE,
-    overflow: 'hidden',
-  },
-  scroll: {
-    flex: 1,
-    width: '100%',
-  },
-  item: {
-    height: ITEM_H,
-    alignSelf: 'stretch',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  text: {
-    fontSize: 16,
-    color: theme.colors.textMuted,
-  },
-  textSelected: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: theme.colors.text,
-  },
-  line: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: theme.colors.border,
-  },
-});
-
-// ── DatePickerField ───────────────────────────────────────────────────────────
 interface DatePickerFieldProps {
   label: string;
   value: string;
@@ -129,35 +29,16 @@ interface DatePickerFieldProps {
 
 export function DatePickerField({ label, value, onChange, error, minimumDate }: DatePickerFieldProps) {
   const [modalVisible, setModalVisible] = useState(false);
+  const [draft, setDraft] = useState<Date>(() => value ? toLocalDate(value) : (minimumDate ?? new Date()));
   const backdropAnim = useRef(new Animated.Value(0)).current;
   const sheetAnim = useRef(new Animated.Value(SHEET_TRANSLATE)).current;
 
-  const initDate = value ? toLocalDate(value) : (minimumDate ?? new Date());
-  const [monthIdx, setMonthIdx] = useState(initDate.getMonth());
-  const [yearIdx, setYearIdx]   = useState(Math.max(0, YEARS.indexOf(initDate.getFullYear())));
-  const [dayIdx, setDayIdx]     = useState(initDate.getDate() - 1);
-
-  const selectedYear = YEARS[yearIdx];
-  const numDays = daysInMonth(monthIdx, selectedYear);
-  const dayItems = Array.from({ length: numDays }, (_, i) => String(i + 1));
-  const clampedDay = Math.min(dayIdx, numDays - 1);
-
-  const handleMonthChange = (i: number) => {
-    setMonthIdx(i);
-    setDayIdx((prev) => Math.min(prev, daysInMonth(i, selectedYear) - 1));
-  };
-
-  const handleYearChange = (i: number) => {
-    setYearIdx(i);
-    setDayIdx((prev) => Math.min(prev, daysInMonth(monthIdx, YEARS[i]) - 1));
-  };
+  // Android: native dialog
+  const [androidOpen, setAndroidOpen] = useState(false);
 
   const openSheet = () => {
     Keyboard.dismiss();
-    const d = value ? toLocalDate(value) : (minimumDate ?? new Date());
-    setMonthIdx(d.getMonth());
-    setYearIdx(Math.max(0, YEARS.indexOf(d.getFullYear())));
-    setDayIdx(d.getDate() - 1);
+    setDraft(value ? toLocalDate(value) : (minimumDate ?? new Date()));
     backdropAnim.setValue(0);
     sheetAnim.setValue(SHEET_TRANSLATE);
     setModalVisible(true);
@@ -174,9 +55,9 @@ export function DatePickerField({ label, value, onChange, error, minimumDate }: 
     ]).start(() => {
       setModalVisible(false);
       if (confirm) {
-        let dateStr = buildDateStr(monthIdx, clampedDay, selectedYear);
+        let dateStr = dateToStr(draft);
         if (minimumDate) {
-          const minStr = `${minimumDate.getFullYear()}-${pad(minimumDate.getMonth() + 1)}-${pad(minimumDate.getDate())}`;
+          const minStr = dateToStr(minimumDate);
           if (dateStr < minStr) dateStr = minStr;
         }
         onChange(dateStr);
@@ -184,15 +65,13 @@ export function DatePickerField({ label, value, onChange, error, minimumDate }: 
     });
   };
 
-  // Android: native dialog
-  const [androidOpen, setAndroidOpen] = useState(false);
-  const currentDate = value ? toLocalDate(value) : (minimumDate ?? new Date());
+  const handleChange = (_e: DateTimePickerEvent, date?: Date) => {
+    if (date) setDraft(date);
+  };
 
   const handleAndroidChange = (_e: DateTimePickerEvent, date?: Date) => {
     setAndroidOpen(false);
-    if (_e.type === 'set' && date) {
-      onChange(`${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`);
-    }
+    if (_e.type === 'set' && date) onChange(dateToStr(date));
   };
 
   const handlePress = () => {
@@ -224,7 +103,7 @@ export function DatePickerField({ label, value, onChange, error, minimumDate }: 
 
       {Platform.OS === 'android' && androidOpen && (
         <DateTimePicker
-          value={currentDate}
+          value={value ? toLocalDate(value) : (minimumDate ?? new Date())}
           mode="date"
           display="default"
           onChange={handleAndroidChange}
@@ -242,6 +121,7 @@ export function DatePickerField({ label, value, onChange, error, minimumDate }: 
             <Animated.View style={{ transform: [{ translateY: sheetAnim }] }}>
               <View style={styles.sheet}>
                 <View style={styles.handle} />
+
                 <View style={styles.sheetHeader}>
                   <TouchableOpacity onPress={() => closeSheet(false)} hitSlop={8}>
                     <Text style={styles.cancelBtn}>Cancel</Text>
@@ -252,11 +132,15 @@ export function DatePickerField({ label, value, onChange, error, minimumDate }: 
                   </TouchableOpacity>
                 </View>
 
-                <View style={styles.wheelsRow}>
-                  <WheelColumn items={MONTHS}            selectedIndex={monthIdx}   onChange={handleMonthChange} flex={3} />
-                  <WheelColumn items={dayItems}           selectedIndex={clampedDay} onChange={setDayIdx}         flex={2} />
-                  <WheelColumn items={YEARS.map(String)} selectedIndex={yearIdx}    onChange={handleYearChange}  flex={3} />
-                </View>
+                <DateTimePicker
+                  value={draft}
+                  mode="date"
+                  display="inline"
+                  onChange={handleChange}
+                  minimumDate={minimumDate}
+                  accentColor={theme.colors.primary}
+                  style={styles.calendar}
+                />
               </View>
             </Animated.View>
           </View>
@@ -318,8 +202,7 @@ const styles = StyleSheet.create({
   sheetTitle:  { fontSize: 15, fontWeight: '600', color: theme.colors.text },
   cancelBtn:   { fontSize: 15, color: theme.colors.textMuted },
   doneBtn:     { fontSize: 15, fontWeight: '600', color: theme.colors.primary },
-  wheelsRow: {
-    flexDirection: 'row',
-    paddingVertical: theme.spacing.sm,
+  calendar: {
+    alignSelf: 'center',
   },
 });

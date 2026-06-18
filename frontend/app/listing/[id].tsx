@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Image, ActivityIndicator,
-  TouchableOpacity, Dimensions, Modal, FlatList,
+  TouchableOpacity, Dimensions, Modal, FlatList, Animated, Easing, Pressable,
 } from 'react-native';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -50,6 +50,8 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+const SHEET_TRANSLATE = 400;
+
 function BuyerPickerModal({
   visible,
   buyers,
@@ -61,38 +63,65 @@ function BuyerPickerModal({
   onSelect: (buyer: ConversationBuyer) => void;
   onCancel: () => void;
 }) {
-  return (
-    <Modal visible={visible} animationType="slide" transparent presentationStyle="overFullScreen">
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalSheet}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Who rented this spot?</Text>
-            <TouchableOpacity onPress={onCancel} hitSlop={8}>
-              <Ionicons name="close" size={22} color={theme.colors.text} />
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.modalSubtitle}>Select the buyer from conversations about this listing.</Text>
+  const backdropAnim = useRef(new Animated.Value(0)).current;
+  const sheetAnim = useRef(new Animated.Value(SHEET_TRANSLATE)).current;
 
-          {buyers.length === 0 ? (
-            <View style={styles.modalEmpty}>
-              <Text style={styles.modalEmptyText}>No conversations yet — can't mark as rented.</Text>
+  useEffect(() => {
+    if (visible) {
+      backdropAnim.setValue(0);
+      sheetAnim.setValue(SHEET_TRANSLATE);
+      Animated.parallel([
+        Animated.timing(backdropAnim, { toValue: 1, duration: 220, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+        Animated.timing(sheetAnim,   { toValue: 0, duration: 300, easing: Easing.out(Easing.poly(4)), useNativeDriver: true }),
+      ]).start();
+    }
+  }, [visible]);
+
+  const dismiss = (cb: () => void) => {
+    Animated.parallel([
+      Animated.timing(backdropAnim, { toValue: 0, duration: 180, easing: Easing.in(Easing.ease), useNativeDriver: true }),
+      Animated.timing(sheetAnim,   { toValue: SHEET_TRANSLATE, duration: 240, easing: Easing.in(Easing.poly(4)), useNativeDriver: true }),
+    ]).start(() => cb());
+  };
+
+  return (
+    <Modal visible={visible} animationType="none" transparent statusBarTranslucent>
+      <View style={styles.modalOuter}>
+        <Animated.View style={[styles.modalBackdrop, { opacity: backdropAnim }]}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => dismiss(onCancel)} />
+        </Animated.View>
+
+        <Animated.View style={{ transform: [{ translateY: sheetAnim }], alignSelf: 'stretch' }}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Who rented this spot?</Text>
+              <TouchableOpacity onPress={() => dismiss(onCancel)} hitSlop={8}>
+                <Ionicons name="close" size={22} color={theme.colors.text} />
+              </TouchableOpacity>
             </View>
-          ) : (
-            <FlatList
-              data={buyers}
-              keyExtractor={(b) => b.id}
-              renderItem={({ item }) => (
-                <TouchableOpacity style={styles.buyerRow} onPress={() => onSelect(item)} activeOpacity={0.7}>
-                  <AvatarImage name={item.name} imageUrl={item.profileImageUrl} size={40} />
-                  <Text style={styles.buyerName}>{item.name}</Text>
-                  <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
-                </TouchableOpacity>
-              )}
-              ItemSeparatorComponent={() => <View style={styles.buyerDivider} />}
-              style={styles.buyerList}
-            />
-          )}
-        </View>
+            <Text style={styles.modalSubtitle}>Select the buyer from conversations about this listing.</Text>
+
+            {buyers.length === 0 ? (
+              <View style={styles.modalEmpty}>
+                <Text style={styles.modalEmptyText}>No conversations yet — can't mark as rented.</Text>
+              </View>
+            ) : (
+              <ScrollView style={styles.buyerList} bounces={false}>
+                {buyers.map((item, index) => (
+                  <View key={item.id}>
+                    <TouchableOpacity style={styles.buyerRow} onPress={() => dismiss(() => onSelect(item))} activeOpacity={0.7}>
+                      <AvatarImage name={item.name} imageUrl={item.profileImageUrl} size={40} />
+                      <Text style={styles.buyerName}>{item.name}</Text>
+                      <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
+                    </TouchableOpacity>
+                    {index < buyers.length - 1 && <View style={styles.buyerDivider} />}
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -709,17 +738,26 @@ const styles = StyleSheet.create({
     color: '#16A34A',
   },
   // Buyer picker modal
-  modalOverlay: {
+  modalOuter: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  modalHandle: {
+    width: 36, height: 4, borderRadius: 2,
+    backgroundColor: theme.colors.border,
+    alignSelf: 'center',
+    marginTop: 10, marginBottom: 2,
   },
   modalSheet: {
     backgroundColor: theme.colors.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingBottom: 34,
-    maxHeight: '60%',
+    maxHeight: 480,
   },
   modalHeader: {
     flexDirection: 'row',
