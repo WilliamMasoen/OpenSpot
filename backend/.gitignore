@@ -2,3 +2,6 @@
 .env.*
 obj/
 bin/
+wwwroot/uploads/
+.vs/
+*.user
