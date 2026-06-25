@@ -36,11 +36,33 @@ namespace OpenSpot.Data
             base.OnModelCreating(modelBuilder);
             modelBuilder.ApplyConfigurationsFromAssembly(typeof(ApplicationDbContext).Assembly);
             modelBuilder.Entity<UserFavorite>().HasKey(f => new { f.UserId, f.ListingId });
-            modelBuilder.Entity<PushToken>().HasIndex(p => p.Token).IsUnique();
-            modelBuilder.Entity<Rating>().HasIndex(r => new { r.SaleId, r.ReviewerId }).IsUnique();
+
+            modelBuilder.Entity<Listing>().HasIndex(l => l.OwnerId);
+            modelBuilder.Entity<Listing>().HasIndex(l => l.IsAvailable);
+            modelBuilder.Entity<Listing>().HasIndex(l => l.CreatedAt);
+            modelBuilder.Entity<Listing>().HasIndex(l => l.Price);
+
+            modelBuilder.Entity<Message>().HasIndex(m => m.ConversationId);
+            modelBuilder.Entity<Message>().HasIndex(m => m.SentAt);
+            modelBuilder.Entity<Message>().HasIndex(m => m.IsRead);
+
+            modelBuilder.Entity<Conversation>().HasIndex(c => c.BuyerId);
+            modelBuilder.Entity<Conversation>().HasIndex(c => c.OwnerId);
             modelBuilder.Entity<Conversation>()
                 .HasIndex(c => new { c.ListingId, c.BuyerId })
                 .IsUnique();
+
+            modelBuilder.Entity<Rating>().HasIndex(r => new { r.SaleId, r.ReviewerId }).IsUnique();
+            modelBuilder.Entity<Rating>().HasIndex(r => r.RevieweeId);
+            modelBuilder.Entity<Rating>().HasIndex(r => r.ReviewerId);
+
+            modelBuilder.Entity<RefreshToken>().HasIndex(t => t.Token).IsUnique();
+            modelBuilder.Entity<RefreshToken>().HasIndex(t => t.UserId);
+
+            modelBuilder.Entity<Sale>().HasIndex(s => s.SellerId);
+            modelBuilder.Entity<Sale>().HasIndex(s => s.BuyerId);
+
+            modelBuilder.Entity<PushToken>().HasIndex(p => p.Token).IsUnique();
         }
     }
 }

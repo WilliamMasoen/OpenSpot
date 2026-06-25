@@ -19,6 +19,7 @@ namespace OpenSpot.Ratings.Services
         public async Task<ServiceResult<GetRatingDto>> CreateRatingAsync(string reviewerId, CreateRatingDto dto, CancellationToken token)
         {
             var sale = await _db.Sales
+                .AsNoTracking()
                 .Include(s => s.Listing)
                 .FirstOrDefaultAsync(s => s.Id == dto.SaleId, token);
 
@@ -66,16 +67,13 @@ namespace OpenSpot.Ratings.Services
 
         public async Task<ServiceResult<List<PendingRatingDto>>> GetPendingAsync(string userId, CancellationToken token)
         {
-            var ratedSaleIds = await _db.Ratings
-                .Where(r => r.ReviewerId == userId)
-                .Select(r => r.SaleId)
-                .ToListAsync(token);
-
             var pending = await _db.Sales
+                .AsNoTracking()
                 .Include(s => s.Listing)
                 .Include(s => s.Seller)
                 .Include(s => s.Buyer)
-                .Where(s => (s.SellerId == userId || s.BuyerId == userId) && !ratedSaleIds.Contains(s.Id))
+                .Where(s => (s.SellerId == userId || s.BuyerId == userId) &&
+                            !_db.Ratings.Any(r => r.SaleId == s.Id && r.ReviewerId == userId))
                 .ToListAsync(token);
 
             var dtos = pending.Select(s =>
@@ -98,6 +96,7 @@ namespace OpenSpot.Ratings.Services
         public async Task<ServiceResult<List<GetRatingDto>>> GetUserRatingsAsync(string userId, CancellationToken token)
         {
             var ratings = await _db.Ratings
+                .AsNoTracking()
                 .Include(r => r.Reviewer)
                 .Where(r => r.RevieweeId == userId)
                 .OrderByDescending(r => r.CreatedAt)

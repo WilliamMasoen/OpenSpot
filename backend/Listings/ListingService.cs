@@ -25,7 +25,7 @@ namespace OpenSpot.Listings.Services
 
         public async Task<ServiceResult<PagedResult<GetListingDto>?>> GetListingsAsync(string? requesterId, int page, int pageSize, string? sortBy, int? maxPrice, double? lat, double? lng, CancellationToken token)
         {
-            var baseQuery = _context.Listing.Where(l => l.IsAvailable);
+            var baseQuery = _context.Listing.AsNoTracking().Where(l => l.IsAvailable);
 
             if (maxPrice.HasValue)
                 baseQuery = baseQuery.Where(l => l.Price <= maxPrice.Value);
@@ -93,6 +93,7 @@ namespace OpenSpot.Listings.Services
         public async Task<ServiceResult<GetListingDto?>> GetListingByIdAsync(Guid id, string? requesterId, CancellationToken token)
         {
             var listing = await _context.Listing
+                .AsNoTracking()
                 .Include(l => l.Images)
                 .Include(l => l.Owner)
                 .FirstOrDefaultAsync(l => l.Id == id, token);
@@ -113,6 +114,7 @@ namespace OpenSpot.Listings.Services
         public async Task<ServiceResult<List<GetListingDto>?>> GetMyListingsAsync(string ownerId, CancellationToken token)
         {
             var listings = await _context.Listing
+                .AsNoTracking()
                 .Include(l => l.Images)
                 .Include(l => l.Owner)
                 .Where(l => l.OwnerId == ownerId)
@@ -219,7 +221,7 @@ namespace OpenSpot.Listings.Services
         public async Task<ServiceResult<List<GetListingDto>?>> SearchListingsAsync(
             string? q, double? lat, double? lng, double radiusKm, string? requesterId, CancellationToken token)
         {
-            var query = _context.Listing.Include(l => l.Images).Include(l => l.Owner).Where(l => l.IsAvailable).AsQueryable();
+            var query = _context.Listing.AsNoTracking().Include(l => l.Images).Include(l => l.Owner).Where(l => l.IsAvailable).AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(q))
             {
@@ -281,6 +283,7 @@ namespace OpenSpot.Listings.Services
         public async Task<ServiceResult<List<GetListingDto>?>> GetFavoritesAsync(string userId, CancellationToken token)
         {
             var listings = await _context.UserFavorites
+                .AsNoTracking()
                 .Where(f => f.UserId == userId)
                 .Include(f => f.Listing).ThenInclude(l => l.Images)
                 .Include(f => f.Listing).ThenInclude(l => l.Owner)

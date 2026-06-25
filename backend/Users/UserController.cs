@@ -189,21 +189,31 @@ namespace OpenSpot.Users.Controllers
             if (user == null) return NotFound("User not found.");
 
             var listings = await _db.Listing
+                .AsNoTracking()
                 .Include(l => l.Images)
                 .Include(l => l.Owner)
                 .Where(l => l.OwnerId == id)
                 .OrderByDescending(l => l.CreatedAt)
                 .ToListAsync(token);
 
-            var ratings = await _db.Ratings
+            var ratingSummary = await _db.Ratings
+                .Where(r => r.RevieweeId == id)
+                .GroupBy(r => r.RevieweeId)
+                .Select(g => new { Avg = (double?)g.Average(r => r.Stars), Count = g.Count() })
+                .FirstOrDefaultAsync(token);
+
+            var recentRatingsRaw = await _db.Ratings
+                .AsNoTracking()
                 .Include(r => r.Reviewer)
                 .Where(r => r.RevieweeId == id)
                 .OrderByDescending(r => r.CreatedAt)
+                .Take(3)
                 .ToListAsync(token);
 
-            double? avgRating = ratings.Count > 0 ? ratings.Average(r => r.Stars) : null;
+            double? avgRating = ratingSummary?.Avg;
+            int totalRatings = ratingSummary?.Count ?? 0;
 
-            var recentRatings = ratings.Take(3).Select(r => new GetRatingDto
+            var recentRatings = recentRatingsRaw.Select(r => new GetRatingDto
             {
                 Id = r.Id,
                 SaleId = r.SaleId,
@@ -222,11 +232,11 @@ namespace OpenSpot.Users.Controllers
                 LastName = user.LastName,
                 ProfileImageUrl = user.ProfileImageUrl,
                 AverageRating = avgRating,
-                TotalRatings = ratings.Count,
+                TotalRatings = totalRatings,
                 MemberSince = user.CreatedAt,
                 ListingCount = listings.Count,
                 RecentRatings = recentRatings,
-                Listings = listings.Select(l => new GetListingDto(l, null, avgRating, ratings.Count)).ToList(),
+                Listings = listings.Select(l => new GetListingDto(l, null, avgRating, totalRatings)).ToList(),
             });
         }
     }
