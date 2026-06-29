@@ -277,7 +277,8 @@ export default function ListingDetailScreen() {
           </ScrollView>
         ) : (
           <View style={styles.galleryPlaceholder}>
-            <Text style={styles.galleryPlaceholderText}>🅿️</Text>
+            <Ionicons name="car-outline" size={48} color={theme.colors.primary} />
+            <Text style={styles.galleryPlaceholderText}>No photos yet</Text>
           </View>
         )}
 
@@ -493,9 +494,12 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
   },
   galleryPlaceholderText: {
-    fontSize: 64,
+    fontSize: 14,
+    fontWeight: '500',
+    color: theme.colors.primary,
   },
   backButton: {
     position: 'absolute',

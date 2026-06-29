@@ -40,7 +40,8 @@ export function ListingCard({
             <Image source={{ uri: listing.imageUrls[0] }} style={styles.tileImage} resizeMode="cover" />
           ) : (
             <View style={styles.tileImagePlaceholder}>
-              <Text style={styles.tileImagePlaceholderText}>🅿️</Text>
+              <Ionicons name="car-outline" size={28} color={theme.colors.primary} />
+              <Text style={styles.tileImagePlaceholderText}>No photos yet</Text>
             </View>
           )}
           {onFavoritePress !== undefined && (
@@ -67,8 +68,13 @@ export function ListingCard({
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.75}>
-      {hasImage && (
+      {hasImage ? (
         <Image source={{ uri: listing.imageUrls[0] }} style={styles.cardImage} resizeMode="cover" />
+      ) : (
+        <View style={styles.cardImagePlaceholder}>
+          <Ionicons name="car-outline" size={36} color={theme.colors.primary} />
+          <Text style={styles.cardImagePlaceholderText}>No photos yet</Text>
+        </View>
       )}
       <View style={styles.cardBody}>
         <View style={styles.topRow}>
@@ -167,9 +173,25 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 4,
   },
   tileImagePlaceholderText: {
-    fontSize: 32,
+    fontSize: 10,
+    fontWeight: '500',
+    color: theme.colors.primary,
+  },
+  cardImagePlaceholder: {
+    width: '100%',
+    height: 160,
+    backgroundColor: theme.colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  cardImagePlaceholderText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: theme.colors.primary,
   },
   heartButton: {
     position: 'absolute',
